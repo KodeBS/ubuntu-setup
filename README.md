@@ -52,7 +52,7 @@ Script an toàn khi chạy lại nhiều lần (idempotent): cái gì đã có t
 | `docker.sh` | Docker Engine, CLI, Buildx, Compose plugin; thêm user vào group `docker` | [docs.docker.com](https://docs.docker.com/engine/install/ubuntu/), [DigitalOcean](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-22-04) |
 | `git.sh` | user.name/email, alias, SSH key ed25519, GitHub CLI | [git-scm](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup) |
 | `apps.sh` | VS Code, Google Chrome, Postman | [code.visualstudio.com](https://code.visualstudio.com/docs/setup/linux) |
-| `clipboard.sh` | **CopyQ** clipboard manager + autostart + phím tắt `Super+V` | [CopyQ](https://github.com/hluk/CopyQ) |
+| `clipboard.sh` | **Clipboard Indicator** (GNOME extension) + phím tắt `Super+V`, tự gỡ CopyQ cũ nếu có | [Clipboard Indicator](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator) |
 
 ## Chạy không cần trả lời câu hỏi
 
@@ -77,7 +77,9 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
 | `GIT_NAME` / `GIT_EMAIL` | định danh commit; bỏ trống thì script hỏi | git |
 | `TERMINAL_FONT` | mặc định `JetBrainsMono Nerd Font Mono 11` (MesloLGS NF thiếu ký tự tiếng Việt) | zsh |
 | `CLIPBOARD_SHORTCUT` | mặc định `<Super>v` | clipboard |
-| `CLIPBOARD_COMMAND` | `copyq menu` (mặc định) \| `copyq toggle` | clipboard |
+| `CLIPBOARD_PASTE_ON_SELECT` | `true` (mặc định) \| `false` — chọn item xong dán luôn | clipboard |
+| `CLIPBOARD_OPEN_AT_CURSOR` | `true` (mặc định) \| `false` — popup cạnh con trỏ thay vì thả từ panel | clipboard |
+| `CLIPBOARD_EXT_UUID` | đổi sang extension khác, vd `clipboard-history@alexsaveau.dev` | clipboard |
 
 ## Sau khi cài
 
@@ -88,8 +90,17 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
   và set sẵn, **không cần chạy `p10k configure`**. Config cũ nếu có sẽ backup ra `~/.p10k.zsh.bak`.
   Terminal đã mở sẵn phải mở cửa sổ mới mới thấy font mới.
 - `gh auth login` nếu đã cài GitHub CLI.
-- Clipboard: `Super+V` mở lịch sử CopyQ (ăn sau khi logout/reboot). GNOME mặc định
-  chiếm `Super+V` cho notification tray — script tự gỡ, tray vẫn mở được bằng `Super+M`.
+- Clipboard: `Super+V` mở lịch sử Clipboard Indicator. **Bắt buộc logout/reboot** — Wayland
+  không cho reload GNOME Shell tại chỗ nên extension chỉ nạp khi shell khởi động lại.
+  GNOME mặc định chiếm `Super+V` cho notification tray — script tự gỡ, tray vẫn mở
+  được bằng `Super+M`. Kiểm tra: `gnome-extensions info clipboard-indicator@tudmotu.com`
+  (State phải là `ACTIVE`).
+  - Dùng extension chứ không dùng app standalone vì Mutter **không** hỗ trợ
+    `wlr-data-control`/`ext-data-control` ([mutter#524](https://gitlab.gnome.org/GNOME/mutter/-/work_items/524)),
+    nên `cliphist`, `clipse`, `greenclip`... đều mù trên GNOME; app Qt/GTK standalone
+    chỉ đọc được clipboard khi ép qua XWayland (`QT_QPA_PLATFORM=xcb`), đổi lại UI mờ
+    và lạc lõng. Kiểm chứng: `wl-paste --watch echo x` → báo thiếu data-control protocol.
+  - Lịch sử CopyQ cũ nằm ở `~/.config/copyq` — script chỉ `apt remove`, không xoá dữ liệu.
 
 ## Ghi chú khi lên 26.04
 
