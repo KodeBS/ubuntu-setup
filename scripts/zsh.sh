@@ -57,9 +57,14 @@ ok "plugins=($PLUGINS)"
 # Phải lấy đúng bản "NerdFontMono": Nerd Fonts phát hành 3 biến thể, bản thường
 # ("Nerd Font") có glyph double-width và bản "Propo" thì proportional — cả hai
 # đều làm terminal giãn ô gấp đôi. Chỉ bản Mono là single-width.
+#
+# Ghim tag thay vì master: nerd-fonts đã xoá thư mục patched-fonts khỏi nhánh
+# master (repo quá nặng), nên URL master trả 404 — font không cài được mà script
+# vẫn chạy tiếp, prompt ra toàn ô vuông hex. Tag cũ vẫn giữ nguyên file.
 install_nerd_font() {
   local dir="$HOME/.local/share/fonts"
-  local base="https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/JetBrainsMono/Ligatures"
+  local tag="v3.4.0"
+  local base="https://github.com/ryanoasis/nerd-fonts/raw/$tag/patched-fonts/JetBrainsMono/Ligatures"
   local variants=("Regular" "Bold" "Italic" "BoldItalic")
   local missing=() v
   for v in "${variants[@]}"; do
@@ -69,15 +74,22 @@ install_nerd_font() {
 
   log "Tải JetBrainsMono Nerd Font Mono (${#missing[@]} file)"
   mkdir -p "$dir"
+  local failed=0
   for v in "${missing[@]}"; do
     if curl -fsSL "$base/$v/JetBrainsMonoNerdFontMono-$v.ttf" -o "$dir/JetBrainsMonoNerdFontMono-$v.ttf"; then
       dim "  JetBrainsMonoNerdFontMono-$v.ttf"
     else
       warn "Không tải được JetBrainsMonoNerdFontMono-$v"; rm -f "$dir/JetBrainsMonoNerdFontMono-$v.ttf"
+      failed=1
     fi
   done
   fc-cache -f "$dir" >/dev/null 2>&1 || true
-  ok "JetBrainsMono Nerd Font Mono xong."
+  if (( failed )); then
+    warn "Thiếu file font -> prompt p10k sẽ ra ô vuông. Kiểm tra tag '$tag' còn không:"
+    warn "  https://github.com/ryanoasis/nerd-fonts/releases"
+  else
+    ok "JetBrainsMono Nerd Font Mono xong."
+  fi
 }
 
 # --- font cho terminal ---------------------------------------------------------
