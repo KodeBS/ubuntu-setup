@@ -53,14 +53,59 @@ if has im-config; then
   im-config -n ibus || warn "im-config lỗi, bỏ qua."
 fi
 
-log "Khởi động lại ibus daemon"
-ibus restart >/dev/null 2>&1 || (setsid ibus-daemon -drx >/dev/null 2>&1 &) || true
+# --- nạp engine mới vào registry của ibus ---------------------------------------
+# Phải làm TRƯỚC khi ghi gsettings: gnome-shell đối chiếu từng entry 'ibus' trong
+# input-sources với registry, entry nào ibus chưa biết thì nó bỏ qua — set xong mà
+# Settings vẫn trống.
+log "Nạp engine vào registry ibus"
+ibus write-cache >/dev/null 2>&1 || true
+ibus restart      >/dev/null 2>&1 || (setsid ibus-daemon -drx >/dev/null 2>&1 &) || true
+
+# --- thêm engine vào Input Sources của GNOME ------------------------------------
+# Không có bước này thì phải vào Settings > Keyboard > Input Sources bấm "+" bằng
+# tay: ibus đã có engine nhưng GNOME không biết để đưa vào danh sách chuyển.
+#
+# Key `sources` kiểu a(ss): [('xkb', 'us'), ('ibus', 'Bamboo')]. Phần tử ĐẦU là
+# input source lúc mới login, nên engine tiếng Việt phải nằm SAU 'xkb' — để lên
+# đầu thì mỗi lần đăng nhập là đang ở chế độ gõ tiếng Việt, gõ lệnh terminal ra
+# toàn dấu.
+add_gnome_input_source() {
+  has gsettings || { warn "Không có gsettings — tự thêm '$ENGINE_ID' trong Settings > Keyboard."; return 0; }
+  gsettings list-schemas 2>/dev/null | grep -qx org.gnome.desktop.input-sources \
+    || { dim "Không phải desktop GNOME, bỏ qua bước thêm input source."; return 0; }
+
+  local key=org.gnome.desktop.input-sources cur new
+  cur="$(gsettings get "$key" sources 2>/dev/null || echo '')"
+
+  # So khớp cả 2 dấu nháy để '$ENGINE_ID' không ăn nhầm biến thể khác cùng tiền tố
+  # (ibus-bamboo đăng ký 7 engine: Bamboo, Bamboo::Us, BambooUs, ...).
+  if [[ "$cur" == *"'$ENGINE_ID'"* ]]; then
+    ok "Input source '$ENGINE_ID' đã có trong GNOME."
+    return 0
+  fi
+
+  if [[ -z "$cur" || "$cur" == "@a(ss) []" || "$cur" == "[]" ]]; then
+    new="[('ibus', '$ENGINE_ID')]"
+  else
+    new="${cur%]}, ('ibus', '$ENGINE_ID')]"
+  fi
+
+  if gsettings set "$key" sources "$new"; then
+    ok "Đã thêm input source: $new"
+  else
+    warn "Không ghi được input-sources — tự thêm '$ENGINE_ID' trong Settings > Keyboard."
+  fi
+}
+add_gnome_input_source
 
 ok "Đã cài $ENGINE_ID."
 cat <<EOF
 
-Bước cuối (làm bằng tay 1 lần):
-  1. Logout / reboot để ibus nạp engine mới.
-  2. Settings > Keyboard > Input Sources > "+" > Vietnamese > chọn "$ENGINE_ID".
-  3. Chuyển bộ gõ bằng Super+Space (hoặc phím tự đặt).
+Bước cuối:
+  1. Logout / reboot để ibus nạp engine mới (BẮT BUỘC — Wayland không cho nạp
+     engine vào session đang chạy).
+  2. Chuyển bộ gõ bằng Super+Space (Shift+Super+Space để lùi lại).
+
+Input source đã được thêm tự động, KHÔNG cần vào Settings > Keyboard bấm "+".
+Kiểm tra: gsettings get org.gnome.desktop.input-sources sources
 EOF

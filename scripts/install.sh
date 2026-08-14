@@ -97,7 +97,7 @@ cat <<'EOF'
 
 Việc cần làm thủ công sau khi cài:
   • Logout/reboot  -> áp dụng zsh mặc định, group docker, ibus engine.
-  • Settings > Keyboard > Input Sources > thêm Vietnamese (Bamboo/Unikey).
+  • Bộ gõ tiếng Việt: đã thêm vào Input Sources tự động, chuyển bằng Super+Space.
   • Terminal: mở cửa sổ mới để nhận font JetBrainsMono Nerd Font Mono.
   • gh auth login  (nếu đã cài GitHub CLI)
   • Clipboard: bấm Super+V (ăn sau khi logout/reboot).
