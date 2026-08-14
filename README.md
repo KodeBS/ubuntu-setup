@@ -1,6 +1,6 @@
 # ubuntu-setup
 
-Script cài đặt lại máy Ubuntu từ đầu. Mỗi thứ 1 script riêng, có script tổng `install.sh` để chạy hết hoặc chọn từng phần.
+Script cài đặt lại máy Ubuntu từ đầu. Mỗi tính năng một thư mục (1 file cài + 1 file gỡ), có 2 script tổng `install.sh` / `uninstall.sh` để chạy hết hoặc chọn từng phần.
 
 Viết cho **Ubuntu 26.04** (máy mới) nhưng chạy được luôn trên **24.04** (máy công ty hiện tại) — không hard-code codename, mọi thứ lấy từ `/etc/os-release`.
 
@@ -21,7 +21,7 @@ Không muốn cài git trước thì tải zip (nhớ `chmod +x` vì zip không 
 sudo apt update && sudo apt install -y curl unzip
 curl -fsSL https://github.com/KodeBS/ubuntu-setup/archive/refs/heads/main.zip -o /tmp/s.zip
 unzip -q /tmp/s.zip -d ~ && cd ~/ubuntu-setup-main/scripts
-chmod +x install.sh *.sh && ./install.sh --all
+find . -name '*.sh' -exec chmod +x {} + && ./install.sh --all
 ```
 
 Repo private mà chưa có SSH key trên máy mới → copy folder qua USB, hoặc `scp -r ~/ubuntu-setup user@may-moi:~/`.
@@ -37,22 +37,91 @@ cd ~/ubuntu-setup/scripts
 ./install.sh --list       # xem danh sách module
 ```
 
-Từng script chạy độc lập được: `./scripts/docker.sh`, `./scripts/nvm-node.sh`, ...
+Từng module chạy độc lập được: `./scripts/docker/install.sh`, `./scripts/nvm-node/install.sh`, ...
 
 Script an toàn khi chạy lại nhiều lần (idempotent): cái gì đã có thì báo `[ok]` và bỏ qua, không cài đè.
 
+## Cấu trúc
+
+Mỗi tính năng là **một thư mục**, trong đó có đúng một file cài và một file gỡ. Thêm tính năng mới = tạo thư mục + 2 file + thêm tên vào mảng `MODULES` của 2 dispatcher.
+
+```
+scripts/
+├── install.sh            # dispatcher cài
+├── uninstall.sh          # dispatcher gỡ
+├── lib/common.sh         # log, apt_install, apt_remove, safe_rm, backup_file...
+├── base/        install.sh  uninstall.sh
+├── zsh/         install.sh  uninstall.sh  p10k.zsh
+├── vietnamese-input/  install.sh  uninstall.sh
+├── nvm-node/    install.sh  uninstall.sh
+├── docker/      install.sh  uninstall.sh
+├── git/         install.sh  uninstall.sh
+├── apps/        install.sh  uninstall.sh
+└── clipboard/   install.sh  uninstall.sh
+```
+
+## Gỡ cài đặt
+
+```bash
+cd ~/ubuntu-setup/scripts
+
+./uninstall.sh              # menu chọn module
+./uninstall.sh --all        # gỡ hết, ngược thứ tự lúc cài
+./uninstall.sh docker zsh   # chỉ gỡ module chỉ định
+./uninstall.sh --list       # xem danh sách
+```
+
+Từng module chạy riêng được: `./scripts/docker/uninstall.sh`, ...
+
+**Mặc định là chế độ an toàn**: chỉ gỡ package và hoàn tác đúng những cấu hình mà script cài đặt đã tạo. Dữ liệu cá nhân giữ nguyên. Mọi file config bị sửa đều được backup ra `<file>.bak-<ngày giờ>` cạnh bản gốc.
+
+| Cờ | Tác dụng |
+|---|---|
+| `--purge` | Gỡ luôn dữ liệu: `/var/lib/docker` (image + **volume**), `~/.nvm`, profile Chrome & VS Code, lịch sử clipboard, `~/.zshrc`. Mỗi thứ không khôi phục được đều hỏi xác nhận riêng (phải gõ `yes`). |
+| `--yes` | Không hỏi gì, dùng khi chạy tự động. Đi kèm `--purge` là xoá thẳng, không hỏi lại. |
+
+### Không bao giờ bị đụng tới — kể cả với `--purge`
+
+| Thứ | Vì sao |
+|---|---|
+| `~/.ssh/id_ed25519` (+ `.pub`) | Mất key là mất quyền truy cập mọi repo/server đã khai báo public key, không tạo lại được cùng fingerprint |
+| `git user.name` / `user.email` | Định danh commit, không phải thứ script cài |
+| Gói `git`, `curl`, `ca-certificates`, `gnupg`, `build-essential`, `software-properties-common`, `tar`, `unzip`, `wget`, `openssh-client` | `apt`/`ubuntu-desktop` phụ thuộc trực tiếp — gỡ là hỏng apt hoặc mất session đồ hoạ |
+| Gói `ibus` | GNOME cần nó để gõ mọi ngôn ngữ, không riêng tiếng Việt |
+| `~/.zshenv` | Script không tạo file này; nó thường chứa env riêng của máy |
+| Plugin/theme lạ trong `~/.oh-my-zsh/custom` | Có thứ không do script clone về thì giữ nguyên cả `~/.oh-my-zsh`, chỉ xoá đúng 4 repo script đã cài |
+
+Ngoài ra `git/uninstall.sh` chỉ `git config --unset` khi giá trị **đúng bằng** cái `git/install.sh` đã đặt — tự đổi `pull.rebase` hay alias nào thì giá trị đó được giữ.
+
+### Thứ tự gỡ
+
+Ngược với lúc cài, và trong module `zsh` thì **đổi shell mặc định về bash trước rồi mới `apt remove zsh`** — làm ngược lại thì login shell trỏ tới binary đã bị xoá, lần login sau không vào được session.
+
+| Module | Gỡ gì | Giữ gì (mặc định) |
+|---|---|---|
+| `clipboard` | Extension Clipboard Indicator, trả `Super+V` về message tray | Lịch sử clip trong `~/.cache/` |
+| `apps` | VS Code, Chrome, Postman + repo apt & keyring | `~/.config/Code`, `~/.config/google-chrome`, snapshot snap |
+| `git` | GitHub CLI + repo apt, alias git do script tạo | SSH key, `user.name`/`user.email`, gói `git` |
+| `docker` | Engine/CLI/Compose, repo apt, gỡ user khỏi group `docker` | `/var/lib/docker` — image & volume còn nguyên |
+| `nvm-node` | `~/.nvm` + mọi bản Node, snippet trong `.bashrc`/`.zshrc` | `~/.npmrc`, cache npm/yarn/pnpm |
+| `vietnamese-input` | `ibus-bamboo`/`ibus-unikey` + PPA + input source trong GNOME | Gói `ibus` |
+| `zsh` | Oh My Zsh, Powerlevel10k, Nerd Font, gói `zsh`; shell về bash | `~/.zshrc` (chỉ gỡ dòng script thêm vào), `~/.zshenv` |
+| `base` | `jq`, `tree`, `ripgrep`, `fd-find`, `zip`, `wl-clipboard` | Toàn bộ gói hệ thống ở bảng trên |
+
+Sau khi gỡ: **logout/reboot** để áp dụng shell bash, bỏ group `docker`, và để GNOME Shell nạp lại không có extension.
+
 ## Modules
 
-| Script | Nội dung | Nguồn |
+| Module | Nội dung | Nguồn |
 |---|---|---|
-| `base.sh` | build-essential, curl, git, jq, ripgrep, fd, tree, wl-clipboard | apt |
-| `zsh.sh` | zsh + Oh My Zsh + autosuggestions/syntax-highlighting/completions + Powerlevel10k, **font JetBrainsMono Nerd Font Mono + set font terminal + áp sẵn `.p10k.zsh`**, đặt shell mặc định | [ohmyzsh](https://github.com/ohmyzsh/ohmyzsh#basic-installation), [p10k](https://github.com/romkatv/powerlevel10k) |
-| `vietnamese-input.sh` | Bộ gõ tiếng Việt: **ibus-bamboo** (mặc định) hoặc ibus-unikey | [BambooEngine](https://github.com/BambooEngine/ibus-bamboo) |
-| `nvm-node.sh` | nvm + Node.js (**menu chọn version**, gợi ý 22 LTS) + yarn/pnpm | [nodejs.org/en/download](https://nodejs.org/en/download), [nvm](https://github.com/nvm-sh/nvm) |
-| `docker.sh` | Docker Engine, CLI, Buildx, Compose plugin; thêm user vào group `docker` | [docs.docker.com](https://docs.docker.com/engine/install/ubuntu/), [DigitalOcean](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-22-04) |
-| `git.sh` | user.name/email, alias, SSH key ed25519, GitHub CLI | [git-scm](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup) |
-| `apps.sh` | VS Code, Google Chrome, Postman | [code.visualstudio.com](https://code.visualstudio.com/docs/setup/linux) |
-| `clipboard.sh` | **Clipboard Indicator** (GNOME extension) + phím tắt `Super+V`, tự gỡ CopyQ cũ nếu có | [Clipboard Indicator](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator) |
+| `base/` | build-essential, curl, git, jq, ripgrep, fd, tree, wl-clipboard | apt |
+| `zsh/` | zsh + Oh My Zsh + autosuggestions/syntax-highlighting/completions + Powerlevel10k, **font JetBrainsMono Nerd Font Mono + set font terminal + áp sẵn `.p10k.zsh`**, đặt shell mặc định | [ohmyzsh](https://github.com/ohmyzsh/ohmyzsh#basic-installation), [p10k](https://github.com/romkatv/powerlevel10k) |
+| `vietnamese-input/` | Bộ gõ tiếng Việt: **ibus-bamboo** (mặc định) hoặc ibus-unikey | [BambooEngine](https://github.com/BambooEngine/ibus-bamboo) |
+| `nvm-node/` | nvm + Node.js (**menu chọn version**, gợi ý 22 LTS) + yarn/pnpm | [nodejs.org/en/download](https://nodejs.org/en/download), [nvm](https://github.com/nvm-sh/nvm) |
+| `docker/` | Docker Engine, CLI, Buildx, Compose plugin; thêm user vào group `docker` | [docs.docker.com](https://docs.docker.com/engine/install/ubuntu/), [DigitalOcean](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-22-04) |
+| `git/` | user.name/email, alias, SSH key ed25519, GitHub CLI | [git-scm](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup) |
+| `apps/` | VS Code, Google Chrome, Postman | [code.visualstudio.com](https://code.visualstudio.com/docs/setup/linux) |
+| `clipboard/` | **Clipboard Indicator** (GNOME extension) + phím tắt `Super+V` | [Clipboard Indicator](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator) |
 
 ## Chạy không cần trả lời câu hỏi
 
@@ -85,7 +154,10 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
 
 - Group `docker`: `newgrp docker` (hoặc `su - $USER`) là dùng được ngay **trong terminal đó**. Các terminal/app đang mở sẵn và app mở từ GUI thì phải logout/reboot mới nhận.
 - **Logout/reboot** để áp dụng: zsh mặc định, ibus engine, và group `docker` cho toàn bộ session.
-- Settings → Keyboard → Input Sources → thêm Vietnamese (Bamboo/Unikey), đổi bằng `Super+Space`.
+- Bộ gõ tiếng Việt: script **tự thêm** engine vào Input Sources của GNOME (`org.gnome.desktop.input-sources sources`),
+  **không cần** vào Settings → Keyboard bấm `+`. Chuyển bộ gõ bằng `Super+Space` (`Shift+Super+Space` để lùi).
+  Engine được chèn **sau** layout `us` để lúc mới login vẫn đang ở chế độ tiếng Anh.
+  Kiểm tra: `gsettings get org.gnome.desktop.input-sources sources` → phải thấy `('ibus', 'Bamboo')` hoặc `('ibus', 'Unikey')`.
 - Powerlevel10k: font `JetBrainsMono Nerd Font Mono` và `~/.p10k.zsh` (rainbow, many icons, nerdfont-v3) được cài
   và set sẵn, **không cần chạy `p10k configure`**. Config cũ nếu có sẽ backup ra `~/.p10k.zsh.bak`.
   Terminal đã mở sẵn phải mở cửa sổ mới mới thấy font mới.
@@ -100,7 +172,6 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
     nên `cliphist`, `clipse`, `greenclip`... đều mù trên GNOME; app Qt/GTK standalone
     chỉ đọc được clipboard khi ép qua XWayland (`QT_QPA_PLATFORM=xcb`), đổi lại UI mờ
     và lạc lõng. Kiểm chứng: `wl-paste --watch echo x` → báo thiếu data-control protocol.
-  - Lịch sử CopyQ cũ nằm ở `~/.config/copyq` — script chỉ `apt remove`, không xoá dữ liệu.
 
 ## Ghi chú khi lên 26.04
 
