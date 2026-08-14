@@ -24,7 +24,7 @@ describe() {
     docker)          echo "Docker Engine + Compose plugin, chạy không cần sudo" ;;
     git)             echo "Cấu hình git, SSH key, GitHub CLI" ;;
     apps)            echo "VS Code, Chrome, Postman" ;;
-    clipboard)       echo "CopyQ clipboard manager + phím tắt Super+V" ;;
+    clipboard)       echo "Clipboard Indicator (GNOME extension) + phím tắt Super+V" ;;
     *)               echo "" ;;
   esac
 }
@@ -39,7 +39,7 @@ list_modules() {
 }
 
 run_module() {
-  local m="$1" script="$HERE/$1.sh"
+  local m="$1" script="$HERE/$1/install.sh"
   [[ -f "$script" ]] || die "Không tìm thấy module: $m ($script)"
   echo
   printf "${C_BLUE}────── %s ──────${C_RESET}\n" "$m"
@@ -61,7 +61,7 @@ selected=()
 case "${1:-}" in
   --list|-l) list_modules; exit 0 ;;
   --all|-a)  selected=("${MODULES[@]}") ;;
-  --help|-h) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  --help|-h) awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"; exit 0 ;;
   "")
     list_modules
     echo

@@ -2,7 +2,7 @@
 # Gói nền tảng: build tools, curl/git/unzip, tiện ích dòng lệnh.
 # Ref: https://help.ubuntu.com/community/InstallingSoftware
 set -euo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 require_ubuntu
 need_sudo

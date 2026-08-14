@@ -3,7 +3,7 @@
 # Ref: https://code.visualstudio.com/docs/setup/linux
 #      https://www.google.com/chrome/
 set -euo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 require_ubuntu
 need_sudo

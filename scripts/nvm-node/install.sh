@@ -2,7 +2,7 @@
 # nvm + Node.js (mặc định gợi ý Node 22 LTS, có menu chọn version).
 # Ref: https://nodejs.org/en/download  |  https://github.com/nvm-sh/nvm#install--update-script
 set -euo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 NVM_VERSION="${NVM_VERSION:-v0.40.3}"     # tag nvm để cài
 NVM_DIR="${NVM_DIR:-$HOME/.nvm}"

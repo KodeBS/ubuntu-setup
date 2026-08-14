@@ -2,7 +2,7 @@
 # zsh + Oh My Zsh + plugin (autosuggestions, syntax-highlighting) + Powerlevel10k.
 # Ref: https://github.com/ohmyzsh/ohmyzsh#basic-installation
 set -euo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 require_ubuntu
 need_sudo
@@ -132,7 +132,7 @@ if confirm "Dùng theme Powerlevel10k? (không thì giữ theme hiện tại)"; 
 
   # Áp config p10k dựng sẵn (rainbow, many icons, nerdfont-v3) -> khỏi phải
   # chạy lại `p10k configure` trên máy mới.
-  P10K_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dotfiles/p10k.zsh"
+  P10K_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/p10k.zsh"
   if [[ -f "$P10K_SRC" ]]; then
     if [[ -f "$HOME/.p10k.zsh" ]] && ! cmp -s "$P10K_SRC" "$HOME/.p10k.zsh"; then
       cp "$HOME/.p10k.zsh" "$HOME/.p10k.zsh.bak"

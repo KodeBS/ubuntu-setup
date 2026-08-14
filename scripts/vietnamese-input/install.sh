@@ -2,7 +2,7 @@
 # Bộ gõ tiếng Việt: ibus-bamboo (khuyên dùng cho GNOME/Ubuntu) hoặc ibus-unikey.
 # Ref: https://github.com/BambooEngine/ibus-bamboo#cài-đặt
 set -euo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 require_ubuntu
 need_sudo

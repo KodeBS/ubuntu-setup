@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Clipboard manager: GNOME extension "Clipboard Indicator" + wl-clipboard,
-# phím tắt Super+V. Tự gỡ CopyQ nếu máy còn bản cài cũ.
+# phím tắt Super+V.
 #
 # Vì sao là extension chứ không phải app standalone:
 #   Mutter/GNOME KHÔNG hỗ trợ wlr-data-control / ext-data-control (issue #524 vẫn
@@ -8,14 +8,14 @@
 #   greenclip, wl-clip-persist...) đều mù trên GNOME — kiểm chứng nhanh:
 #       wl-paste --watch echo x
 #       -> "Watch mode requires a compositor that supports the wlroots data-control protocol"
-#   App standalone chỉ đọc được clipboard khi ép qua XWayland (CopyQ dùng cách này),
+#   App standalone (CopyQ, Diodon...) chỉ đọc được clipboard khi ép qua XWayland,
 #   đổi lại UI Qt lạc lõng và mờ ở HiDPI. Extension chạy trong tiến trình GNOME Shell
 #   nên dùng thẳng St.Clipboard, popup là widget GNOME thật.
 #
 # Ref: https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator
 #      https://gitlab.gnome.org/GNOME/mutter/-/work_items/524
 set -euo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 require_ubuntu
 
@@ -39,29 +39,6 @@ has python3          || die "Thiếu python3 (dùng để đọc JSON của exte
 need_sudo
 apt_install wl-clipboard curl unzip
 
-# --- gỡ CopyQ cũ ---------------------------------------------------------------
-# Để lại sẽ tranh Super+V với extension. Dùng `apt-get remove` chứ không `purge`:
-# lịch sử clip cũ ở ~/.config/copyq được giữ nguyên, muốn xoá thì tự xoá.
-remove_copyq() {
-  local autostart="$HOME/.config/autostart/copyq.desktop"
-
-  if pgrep -x copyq >/dev/null 2>&1; then
-    copyq exit >/dev/null 2>&1 || pkill -x copyq >/dev/null 2>&1 || true
-    ok "Đã tắt CopyQ server."
-  fi
-
-  # Chỉ xoá đúng file autostart do script này từng tạo, không đụng file lạ.
-  if [[ -f "$autostart" ]] && grep -qi copyq "$autostart"; then
-    rm -f "$autostart"
-    ok "Đã xoá autostart cũ: $autostart"
-  fi
-
-  if dpkg -s copyq >/dev/null 2>&1; then
-    log "Gỡ gói copyq (giữ nguyên ~/.config/copyq)"
-    sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y copyq
-  fi
-}
-
 # --- helper GVariant kiểu 'as' -------------------------------------------------
 # gsettings trả về dạng ['a', 'b'] hoặc @as [].
 gv_split() { grep -o "'[^']*'" <<<"${1:-}" | tr -d "'" || true; }
@@ -69,32 +46,6 @@ gv_pack() {
   local out="" x
   for x in "$@"; do out+="'${x}', "; done
   printf "[%s]" "${out%, }"
-}
-
-# --- dọn custom keybinding trỏ tới copyq --------------------------------------
-drop_copyq_keybinding() {
-  local schema="org.gnome.settings-daemon.plugins.media-keys"
-  local child="org.gnome.settings-daemon.plugins.media-keys.custom-keybinding"
-  local list keep=() p removed=0
-
-  list="$(gsettings get "$schema" custom-keybindings 2>/dev/null || echo '@as []')"
-  while IFS= read -r p; do
-    [[ -z "$p" ]] && continue
-    if gsettings get "${child}:${p}" command 2>/dev/null | grep -q copyq; then
-      # Reset cả 3 key của slot, nếu không dconf còn rác trỏ vào lệnh đã gỡ.
-      gsettings reset "${child}:${p}" name    2>/dev/null || true
-      gsettings reset "${child}:${p}" command 2>/dev/null || true
-      gsettings reset "${child}:${p}" binding 2>/dev/null || true
-      removed=1
-    else
-      keep+=("$p")
-    fi
-  done < <(gv_split "$list")
-
-  if [[ $removed -eq 1 ]]; then
-    gsettings set "$schema" custom-keybindings "$(gv_pack "${keep[@]+"${keep[@]}"}")"
-    ok "Đã gỡ custom keybinding cũ của CopyQ."
-  fi
 }
 
 # --- giải phóng Super+V --------------------------------------------------------
@@ -206,8 +157,6 @@ tune_extension() {
   ok "Cấu hình: $SHORTCUT | paste-on-select=$PASTE_ON_SELECT | open-at-cursor=$OPEN_AT_CURSOR"
 }
 
-remove_copyq
-drop_copyq_keybinding
 free_shortcut
 install_extension
 enable_extension
@@ -222,5 +171,4 @@ Clipboard Indicator đã sẵn sàng.
     trên panel).
   • Chỉnh sâu hơn: gnome-extensions prefs $UUID
   • Kiểm tra nhanh: gnome-extensions info $UUID   (State phải là ACTIVE)
-  • Lịch sử CopyQ cũ vẫn còn ở ~/.config/copyq, tự xoá nếu không cần.
 EOF

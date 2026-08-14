@@ -3,7 +3,7 @@
 # Ref: https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup
 #      https://docs.github.com/en/authentication/connecting-to-github-with-ssh
 set -euo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 require_ubuntu
 need_sudo
