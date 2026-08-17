@@ -246,12 +246,6 @@ setup_disk() { # setup_disk <dev> <tên>
 
   [[ -n "$part" ]] || { err "$dev không có partition nào dùng được."; return 1; }
 
-  # Label khớp tên thư mục: label chính là chữ hiện trong sidebar/Disks.
-  if [[ "$fstype" == ext4 ]] && has e2label; then
-    local cur; cur="$(sudo e2label "$part" 2>/dev/null || true)"
-    [[ "$cur" == "$name" ]] || { sudo e2label "$part" "$name"; ok "Đổi label: '${cur:-<trống>}' -> '$name'"; }
-  fi
-
   uuid="$(sudo blkid -s UUID -o value "$part")"
   [[ -n "$uuid" ]] || { err "Không đọc được UUID của $part."; return 1; }
 
@@ -279,6 +273,27 @@ setup_disk() { # setup_disk <dev> <tên>
 
   sudo systemctl daemon-reload
   findmnt "$mp" >/dev/null 2>&1 && sudo umount "$mp"
+
+  # Đổi label ở đây, giữa umount và mount, vì hai lý do:
+  #   1. e2label ghi thẳng superblock; làm khi filesystem đang mount là thao tác
+  #      không được khuyến khích và bản e2fsprogs mới có thể từ chối.
+  #   2. Label mới nằm trên đĩa ngay, nhưng lsblk / /dev/disk/by-label lấy từ
+  #      database của udev — không có event thì udev vẫn trả giá trị cũ, nhìn cứ
+  #      tưởng lệnh không ăn. Lệnh mount ngay sau đó phát ra event 'change' nên
+  #      udev tự probe lại, khỏi phải udevadm trigger bằng tay.
+  # Label chính là chữ hiện ở mục thiết bị trong Files và trong app Disks.
+  if [[ "$fstype" == ext4 ]] && has e2label; then
+    local cur; cur="$(sudo e2label "$part" 2>/dev/null || true)"
+    if [[ "$cur" != "$name" ]]; then
+      if findmnt --source "$part" >/dev/null 2>&1; then
+        warn "$part đang mount ở chỗ khác, không đổi label được (giữ '${cur:-<trống>}')."
+      else
+        sudo e2label "$part" "$name"
+        ok "Đổi label: '${cur:-<trống>}' -> '$name'"
+      fi
+    fi
+  fi
+
   sudo mount "$mp" || { err "Mount $mp thất bại."; return 1; }
   ok "Đã mount $part -> $mp"
 
