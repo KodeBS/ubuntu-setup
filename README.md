@@ -57,7 +57,8 @@ scripts/
 ├── docker/      install.sh  uninstall.sh
 ├── git/         install.sh  uninstall.sh
 ├── apps/        install.sh  uninstall.sh
-└── clipboard/   install.sh  uninstall.sh
+├── clipboard/   install.sh  uninstall.sh
+└── disks/       install.sh  uninstall.sh
 ```
 
 ## Gỡ cài đặt
@@ -89,6 +90,7 @@ Từng module chạy riêng được: `./scripts/docker/uninstall.sh`, ...
 | Gói `git`, `curl`, `ca-certificates`, `gnupg`, `build-essential`, `software-properties-common`, `tar`, `unzip`, `wget`, `openssh-client` | `apt`/`ubuntu-desktop` phụ thuộc trực tiếp — gỡ là hỏng apt hoặc mất session đồ hoạ |
 | Gói `ibus` | GNOME cần nó để gõ mọi ngôn ngữ, không riêng tiếng Việt |
 | `~/.zshenv` | Script không tạo file này; nó thường chứa env riêng của máy |
+| Dữ liệu trên ổ phụ (`disks`) | `uninstall` chỉ bỏ phần tự mount. Format là thao tác riêng, phải chủ động chạy `DISK_FORMAT=force` và gõ `yes` |
 | Plugin/theme lạ trong `~/.oh-my-zsh/custom` | Có thứ không do script clone về thì giữ nguyên cả `~/.oh-my-zsh`, chỉ xoá đúng 4 repo script đã cài |
 
 Ngoài ra `git/uninstall.sh` chỉ `git config --unset` khi giá trị **đúng bằng** cái `git/install.sh` đã đặt — tự đổi `pull.rebase` hay alias nào thì giá trị đó được giữ.
@@ -99,6 +101,7 @@ Ngược với lúc cài, và trong module `zsh` thì **đổi shell mặc đị
 
 | Module | Gỡ gì | Giữ gì (mặc định) |
 |---|---|---|
+| `disks` | Dòng fstab + bookmark sidebar, umount ổ | **Toàn bộ dữ liệu trên ổ** — không bao giờ format, kể cả `--purge` |
 | `clipboard` | Extension Clipboard Indicator, trả `Super+V` về message tray | Lịch sử clip trong `~/.cache/` |
 | `apps` | VS Code, Chrome, Postman + repo apt & keyring | `~/.config/Code`, `~/.config/google-chrome`, snapshot snap |
 | `git` | GitHub CLI + repo apt, alias git do script tạo | SSH key, `user.name`/`user.email`, gói `git` |
@@ -122,6 +125,7 @@ Sau khi gỡ: **logout/reboot** để áp dụng shell bash, bỏ group `docker`
 | `git/` | user.name/email, alias, SSH key ed25519, GitHub CLI | [git-scm](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup) |
 | `apps/` | VS Code, Google Chrome, Postman | [code.visualstudio.com](https://code.visualstudio.com/docs/setup/linux) |
 | `clipboard/` | **Clipboard Indicator** (GNOME extension) + phím tắt `Super+V` | [Clipboard Indicator](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator) |
+| `disks/` | Gắn ổ cứng phụ (ổ chứa code/data) vào `/etc/fstab` **theo UUID** — tự mount mỗi lần boot, thêm vào sidebar của Files | [fstab(5)](https://man7.org/linux/man-pages/man5/fstab.5.html) |
 
 ## Chạy không cần trả lời câu hỏi
 
@@ -149,6 +153,12 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
 | `CLIPBOARD_PASTE_ON_SELECT` | `true` (mặc định) \| `false` — chọn item xong dán luôn | clipboard |
 | `CLIPBOARD_OPEN_AT_CURSOR` | `true` (mặc định) \| `false` — popup cạnh con trỏ thay vì thả từ panel | clipboard |
 | `CLIPBOARD_EXT_UUID` | đổi sang extension khác, vd `clipboard-history@alexsaveau.dev` | clipboard |
+| `DISKS` | `"/dev/sdb=Data;/dev/sdc=Media"` — bỏ trống thì hiện menu chọn ổ | disks |
+| `DISK_FORMAT` | `never` (mặc định, chỉ mount ổ đã có filesystem) \| `empty` (format nếu ổ chưa có fs) \| `force` (format lại, hỏi gõ `yes`) | disks |
+| `DISK_FS` | `ext4` (mặc định) \| `xfs` — chỉ dùng khi format | disks |
+| `DISK_MOUNT_BASE` | mặc định `$HOME` → mount point là `$HOME/<Tên>` | disks |
+| `DISK_BOOKMARK` | `true` (mặc định) — thêm vào sidebar của Files | disks |
+| `DISK_REMOVE_LOST_FOUND` | `true` (mặc định) — xoá `lost+found` sau khi format | disks |
 
 ## Sau khi cài
 
@@ -162,6 +172,15 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
   và set sẵn, **không cần chạy `p10k configure`**. Config cũ nếu có sẽ backup ra `~/.p10k.zsh.bak`.
   Terminal đã mở sẵn phải mở cửa sổ mới mới thấy font mới.
 - `gh auth login` nếu đã cài GitHub CLI.
+- Ổ phụ (`disks`): ghi vào fstab **theo UUID** chứ không phải `/dev/sdb1`, vì tên thiết bị do kernel
+  cấp theo thứ tự phát hiện — cắm thêm ổ hoặc đổi khe M.2 là `nvme0n1` ↔ `nvme1n1` hoán vị nhau ngay,
+  còn UUID nằm trong superblock nên không đổi. Có `nofail` để ổ hỏng/tháo ra máy vẫn boot bình thường
+  thay vì rơi vào emergency shell. Kiểm tra: `findmnt --verify` và `lsblk -o NAME,LABEL,SIZE,MOUNTPOINT`.
+  - Mục trong sidebar là **bookmark** (icon thư mục), không phải mục thiết bị có nút eject — mount
+    option `x-gvfs-hide` giấu mục thiết bị đi để khỏi vừa trùng vừa dễ bấm nhầm eject. Chữ hiện trong
+    mục thiết bị/Disks là **label của filesystem**, script đặt label trùng tên thư mục.
+  - Nautilus giữ bookmarks trong bộ nhớ và ghi đè file khi thoát, nên script **tắt Nautilus** (`nautilus -q`)
+    trước khi sửa `~/.config/gtk-3.0/bookmarks` — sửa lúc nó đang chạy là mất trắng.
 - Clipboard: `Super+V` mở lịch sử Clipboard Indicator. **Bắt buộc logout/reboot** — Wayland
   không cho reload GNOME Shell tại chỗ nên extension chỉ nạp khi shell khởi động lại.
   GNOME mặc định chiếm `Super+V` cho notification tray — script tự gỡ, tray vẫn mở

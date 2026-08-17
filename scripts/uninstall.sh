@@ -20,10 +20,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib/common.sh"
 
 # Ngược thứ tự install (base gỡ sau cùng vì mọi module khác dựa vào nó).
-MODULES=(clipboard apps git docker nvm-node vietnamese-input zsh base)
+MODULES=(disks clipboard apps git docker nvm-node vietnamese-input zsh base)
 
 describe() {
   case "$1" in
+    disks)            echo "Bỏ ổ phụ khỏi fstab + sidebar (KHÔNG xoá dữ liệu trên ổ)" ;;
     clipboard)        echo "Extension Clipboard Indicator + trả Super+V về message tray" ;;
     apps)             echo "VS Code, Chrome, Postman + repo apt của chúng" ;;
     git)              echo "GitHub CLI + alias git do script tạo (GIỮ SSH key & user.name/email)" ;;

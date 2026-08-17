@@ -13,7 +13,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib/common.sh"
 
 # Thứ tự chạy khi --all (base trước, phần còn lại phụ thuộc vào nó).
-MODULES=(base zsh vietnamese-input nvm-node docker git apps clipboard)
+MODULES=(base zsh vietnamese-input nvm-node docker git apps clipboard disks)
 
 describe() {
   case "$1" in
@@ -25,6 +25,7 @@ describe() {
     git)             echo "Cấu hình git, SSH key, GitHub CLI" ;;
     apps)            echo "VS Code, Chrome, Postman" ;;
     clipboard)       echo "Clipboard Indicator (GNOME extension) + phím tắt Super+V" ;;
+    disks)           echo "Gắn ổ cứng phụ vào fstab theo UUID — tự mount mỗi lần boot" ;;
     *)               echo "" ;;
   esac
 }
