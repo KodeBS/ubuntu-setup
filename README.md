@@ -31,11 +31,12 @@ Repo private mà chưa có SSH key trên máy mới → copy folder qua USB, ho�
 ```bash
 cd ~/ubuntu-setup/scripts
 
-./install.sh              # menu chọn module
+./install.sh              # menu checklist (↑↓ · Enter bật/tắt · Esc huỷ)
 ./install.sh --all        # chạy hết theo thứ tự
 ./install.sh zsh docker   # chỉ chạy module chỉ định
 ./install.sh --list       # xem danh sách module
 ./install.sh --yes --all  # không hỏi gì, trả lời "yes" cho mọi câu hỏi
+NO_TUI=1 ./install.sh     # dùng menu gõ số thay cho checklist
 ```
 
 Từng module chạy độc lập được: `./scripts/docker/install.sh`, `./scripts/nvm-node/install.sh`, ...
@@ -67,7 +68,7 @@ scripts/
 ```bash
 cd ~/ubuntu-setup/scripts
 
-./uninstall.sh              # menu chọn module
+./uninstall.sh              # menu checklist (mặc định không tick sẵn gì)
 ./uninstall.sh --all        # gỡ hết, ngược thứ tự lúc cài
 ./uninstall.sh docker zsh   # chỉ gỡ module chỉ định
 ./uninstall.sh --list       # xem danh sách

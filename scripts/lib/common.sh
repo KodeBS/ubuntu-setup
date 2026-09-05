@@ -203,3 +203,204 @@ git_unset_if() { # git_unset_if <key> <expected-value>
   git config --global --unset "$key" 2>/dev/null || true
   dim "  git config --unset $key"
 }
+
+
+# ==============================================================================
+# Giao diện: menu chọn module + header/tổng kết cho dispatcher
+# ==============================================================================
+# Menu tự vẽ thay vì whiptail: newt hardcode Enter trong listbox = submit, không
+# remap được, mà ta muốn Enter dùng để bật/tắt lựa chọn.
+#
+# Phím:  ↑↓ di chuyển · Enter/Space bật/tắt
+#        ↓ ở dòng cuối rơi xuống hàng nút OK/Huỷ, ↑ ở đó thì quay lại
+#        Tab nhảy nhanh giữa danh sách và nút · ←→ đổi nút · Esc/q huỷ
+#
+# Cần terminal tương tác. NO_TUI=1 hoặc TERM=dumb hoặc không có tty -> menu gõ số.
+use_tui() {
+  [[ "${NO_TUI:-0}" == 1 ]] && return 1
+  [[ -n "${TERM:-}" && "$TERM" != dumb ]] || return 1
+  have_tty
+}
+
+term_cols()  { tput cols  2>/dev/null || echo 80; }
+term_lines() { tput lines 2>/dev/null || echo 24; }
+
+# Kẻ một đường ngang dài hết bề ngang terminal, có tiêu đề ở đầu.
+#   ────── [3/8] nvm-node ─────────────────────────
+hr_title() { # hr_title <tiêu đề>
+  local title="$1" cols pad n
+  cols="$(term_cols)"; (( cols > 100 )) && cols=100
+  n=$(( cols - ${#title} - 9 )); (( n < 3 )) && n=3
+  printf -v pad '%*s' "$n" ''
+  printf "${C_BLUE}────── %s ${C_RESET}${C_DIM}%s${C_RESET}\n" "$title" "${pad// /─}"
+}
+
+fmt_dur() { # fmt_dur <giây> -> 8s | 1m06s
+  local s="$1"
+  (( s < 60 )) && { printf '%ds' "$s"; return; }
+  printf '%dm%02ds' $(( s / 60 )) $(( s % 60 ))
+}
+
+# Số CỘT HIỂN THỊ của một chuỗi. Không dùng ${#s}: nó đếm ký tự ở locale UTF-8
+# nhưng đếm BYTE ở LANG=C, nên viền phải của khung sẽ lệch tuỳ máy. Đếm số byte
+# dẫn đầu UTF-8 (bỏ mọi byte tiếp diễn 0x80-0xBF) thì đúng ở mọi locale.
+# Chỉ đúng với ký tự rộng 1 cột — đủ dùng: ta chỉ hiển thị chữ Latin/tiếng Việt.
+dwidth() { printf '%s' "$1" | tr -d '\200-\277' | wc -c; }
+
+rep() { # rep <ký tự> <số lần>
+  local pad; printf -v pad '%*s' "$2" ''; printf '%s' "${pad// /$1}"
+}
+
+# Checklist tự vẽ, có khung.
+#   menu_checklist <tiêu đề> <nhãn nút OK> <tag> <mô tả> <on|off> ...
+# In ra STDOUT các tag được chọn (mỗi dòng một tag); trả 1 nếu người dùng huỷ.
+#
+# Giao diện vẽ thẳng ra /dev/tty (fd 3) chứ không ra stdout: người gọi dùng
+# `chosen="$(menu_checklist ...)"` nên stdout đã bị command substitution nuốt.
+#
+# Phím:  ↑↓ di chuyển (↓ ở dòng cuối rơi xuống hàng nút, ↑ ở đó thì quay lại)
+#        Enter/Space bật/tắt · Tab nhảy nhanh · ←→ đổi nút · Esc/q huỷ
+menu_checklist() {
+  local title="$1" oklabel="$2"; shift 2
+  local -a tag=() desc=() on=()
+  while (( $# >= 3 )); do
+    tag+=("$1"); desc+=("$2"); [[ "$3" == on ]] && on+=(1) || on+=(0); shift 3
+  done
+  local n=${#tag[@]} focus=0 btn=0 i key rest
+
+  # --- đo & đệm sẵn một lần, không đo lại mỗi lần vẽ ---------------------------
+  local tagw=0 descw=0 w
+  for (( i = 0; i < n; i++ )); do
+    w=$(dwidth "${tag[i]}");  (( w > tagw ))  && tagw=$w
+    w=$(dwidth "${desc[i]}"); (( w > descw )) && descw=$w
+  done
+  local hint="↑↓ chọn · Enter bật/tắt · Tab nhảy nhanh · Esc huỷ"
+  local titlew hintw
+  titlew=$(dwidth "$title"); hintw=$(dwidth "$hint")
+
+  # inner = "  " + [✓] + " " + tag + "  " + mô tả + " "
+  local inner=$(( tagw + descw + 9 ))
+  (( inner < hintw + 2 ))   && inner=$(( hintw + 2 ))
+  (( inner < titlew + 12 )) && inner=$(( titlew + 12 ))
+  # Terminal hẹp hơn khung thì bỏ viền, vẽ trần — vẫn dùng được, chỉ kém đẹp.
+  local framed=1
+  (( $(term_cols) < inner + 2 )) && framed=0
+
+  local -a tagpad=() descpad=()
+  for (( i = 0; i < n; i++ )); do
+    tagpad[i]="${tag[i]}$(rep ' ' $(( tagw - $(dwidth "${tag[i]}") )))"
+    descpad[i]="${desc[i]}$(rep ' ' $(( descw - $(dwidth "${desc[i]}") )))"
+  done
+  # inner - hintw - 2: trừ 2 khoảng trắng thụt đầu dòng. (Đếm nhầm thành 3 thì
+  # riêng dòng này ngắn hơn các dòng khác 1 cột, viền phải bị thụt vào.)
+  local hintpad="$hint$(rep ' ' $(( inner - hintw - 2 )))"
+  local bar; bar="$(rep '─' "$inner")"
+
+  exec 3>/dev/tty 4</dev/tty
+  local drawn=0 rows=$(( n + 8 ))
+  restore_term() { printf '\033[?25h' >&3; exec 3>&- 4<&- 2>/dev/null || true; }
+  trap 'restore_term; trap - INT; kill -INT $$' INT
+  trap 'restore_term' RETURN
+  printf '\033[?25l' >&3
+
+  # Vẽ một dòng nội dung, kèm viền nếu có.
+  line() { # line <nội dung đã đệm đủ $inner cột>
+    if (( framed )); then printf "\033[K${C_DIM}│${C_RESET}%b${C_DIM}│${C_RESET}\n" "$1" >&3
+    else                  printf '\033[K%b\n' "$1" >&3; fi
+  }
+
+  draw() {
+    (( drawn )) && printf '\033[%dA' "$rows" >&3
+    drawn=1
+    local sel=0
+    for (( i = 0; i < n; i++ )); do (( on[i] )) && sel=$(( sel + 1 )); done
+    local count="$sel/$n"
+    local fill=$(( inner - 6 - titlew - ${#count} ))
+    (( fill < 1 )) && fill=1
+
+    if (( framed )); then
+      printf "\033[K${C_DIM}╭─ ${C_RESET}${C_BLUE}%s${C_RESET} ${C_DIM}%s %s ─╮${C_RESET}\n" \
+        "$title" "$(rep '─' "$fill")" "$count" >&3
+    else
+      printf "\033[K  ${C_BLUE}%s${C_RESET}  ${C_DIM}%s${C_RESET}\n" "$title" "$count" >&3
+    fi
+    line "$(rep ' ' "$inner")"
+
+    for (( i = 0; i < n; i++ )); do
+      # Hai kênh hiển thị TÁCH BẠCH:
+      #   đảo màu cả dòng = đang đứng ở đâu
+      #   ô [✓] / [ ]     = đang bật hay tắt
+      # Trước đây dùng ●/○ tô xanh, nhưng dòng đang chọn bị đảo màu nên mất luôn
+      # màu, chỉ còn phân biệt đặc/rỗng — nhìn không ra. Ô có/không có dấu tick
+      # thì rõ kể cả khi không còn màu.
+      local box='[ ]' body
+      (( on[i] )) && box='[✓]'
+      if (( focus == i )); then
+        body="\033[7m  $box ${tagpad[i]}  ${descpad[i]} \033[0m"
+      elif (( on[i] )); then
+        body="  ${C_GREEN}$box${C_RESET} ${tagpad[i]}  ${C_DIM}${descpad[i]}${C_RESET} "
+      else
+        body="  ${C_DIM}$box${C_RESET} ${tagpad[i]}  ${C_DIM}${descpad[i]}${C_RESET} "
+      fi
+      line "$body"
+    done
+
+    line "$(rep ' ' "$inner")"
+    if (( framed )); then
+      printf "\033[K${C_DIM}├%s┤${C_RESET}\n" "$bar" >&3
+    else
+      printf '\033[K\n' >&3
+    fi
+    line "  ${C_DIM}${hintpad}${C_RESET}"
+    if (( framed )); then printf "\033[K${C_DIM}╰%s╯${C_RESET}\n" "$bar" >&3
+    else                  printf '\033[K\n' >&3; fi
+
+    local b1=" $oklabel " b2=" Huỷ bỏ "
+    if (( focus == n && btn == 0 )); then b1="\033[7m$b1\033[0m"; else b1="${C_DIM}[${C_RESET}$b1${C_DIM}]${C_RESET}"; fi
+    if (( focus == n && btn == 1 )); then b2="\033[7m$b2\033[0m"; else b2="${C_DIM}[${C_RESET}$b2${C_DIM}]${C_RESET}"; fi
+    printf '\033[K\n\033[K      %b     %b\n' "$b1" "$b2" >&3
+  }
+
+  while :; do
+    draw
+    IFS= read -rsN1 key <&4 || { restore_term; return 1; }
+    case "$key" in
+      $'\e')
+        # Esc đơn độc = huỷ; Esc[A/B/C/D = phím mũi tên. Phân biệt bằng timeout:
+        # phím mũi tên gửi cả chuỗi liền một mạch, Esc thật thì không có gì theo sau.
+        if IFS= read -rsN1 -t 0.05 rest <&4 && [[ "$rest" == '[' || "$rest" == O ]]; then
+          IFS= read -rsN1 -t 0.05 rest <&4 || rest=''
+          case "$rest" in
+            # ↓ ở dòng cuối rơi xuống hàng nút, ↑ ở hàng nút thì quay lại danh
+            # sách — giống trình cài Ubuntu. Tab vẫn còn để nhảy nhanh.
+            A) if (( focus == n )); then focus=$(( n - 1 ))
+               elif (( focus > 0 )); then focus=$(( focus - 1 )); fi ;;
+            B) if (( focus < n - 1 )); then focus=$(( focus + 1 ))
+               elif (( focus == n - 1 )); then focus=$n; btn=0; fi ;;
+            C) (( focus == n )) && btn=1 ;;
+            D) (( focus == n )) && btn=0 ;;
+            Z) (( focus == n )) && focus=0 ;;              # Shift+Tab
+          esac
+        else
+          restore_term; return 1
+        fi ;;
+      $'\t')
+        if (( focus < n )); then focus=$n; btn=0; else focus=0; fi ;;
+      $'\n'|$'\r'|'')
+        if (( focus < n )); then
+          on[focus]=$(( 1 - on[focus] ))
+        elif (( btn == 0 )); then
+          break
+        else
+          restore_term; return 1
+        fi ;;
+      ' ')
+        (( focus < n )) && on[focus]=$(( 1 - on[focus] )) ;;
+      q|Q) restore_term; return 1 ;;
+    esac
+  done
+
+  restore_term
+  for (( i = 0; i < n; i++ )); do (( on[i] )) && printf '%s\n' "${tag[i]}"; done
+  return 0
+}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Script gỡ: đảo ngược những gì install.sh đã cài.
 #
-#   ./uninstall.sh                 # menu chọn (mặc định)
+#   ./uninstall.sh                 # menu checklist (mặc định, không tick sẵn gì)
 #   ./uninstall.sh --all           # gỡ hết, theo thứ tự ngược với lúc cài
 #   ./uninstall.sh docker zsh      # chỉ gỡ module chỉ định
 #   ./uninstall.sh --list          # liệt kê module
@@ -11,6 +11,9 @@
 #             clipboard, profile Chrome/VS Code...). Mỗi thứ không khôi phục được
 #             đều hỏi xác nhận riêng.
 #   --yes     không hỏi gì (dùng cho chạy tự động). Đi kèm --purge là xoá thẳng.
+#
+# Menu mặc định là checklist có khung (↑↓ · Enter bật/tắt · Tab · Esc huỷ);
+# NO_TUI=1 để dùng menu gõ số.
 #
 # MẶC ĐỊNH (không có --purge): chỉ gỡ package + hoàn tác cấu hình do script tạo.
 # Dữ liệu cá nhân giữ nguyên. SSH key và git user.name/user.email KHÔNG BAO GIỜ
@@ -24,15 +27,15 @@ MODULES=(disks clipboard apps git docker nvm-node vietnamese-input zsh base)
 
 describe() {
   case "$1" in
-    disks)            echo "Bỏ ổ phụ khỏi fstab + sidebar (KHÔNG xoá dữ liệu trên ổ)" ;;
-    clipboard)        echo "Extension Clipboard Indicator + trả Super+V về message tray" ;;
-    apps)             echo "VS Code, Chrome, Postman + repo apt của chúng" ;;
-    git)              echo "GitHub CLI + alias git do script tạo (GIỮ SSH key & user.name/email)" ;;
-    docker)           echo "Docker Engine/Compose, repo apt, gỡ user khỏi group docker" ;;
-    nvm-node)         echo "nvm + toàn bộ Node đã cài + snippet trong .bashrc/.zshrc" ;;
-    vietnamese-input) echo "ibus-bamboo/ibus-unikey + PPA (GIỮ gói ibus của hệ thống)" ;;
-    zsh)              echo "Oh My Zsh, Powerlevel10k, Nerd Font, zsh; trả shell về bash" ;;
-    base)             echo "Tiện ích CLI an toàn (jq, tree, ripgrep, fd...) — giữ gói hệ thống" ;;
+    disks)            echo "Bỏ ổ phụ khỏi fstab (KHÔNG xoá dữ liệu)" ;;
+    clipboard)        echo "Clipboard Indicator + trả Super+V về tray" ;;
+    apps)             echo "VS Code, Chrome, Postman + repo apt" ;;
+    git)              echo "GitHub CLI + alias (GIỮ SSH key & email)" ;;
+    docker)           echo "Docker Engine/Compose, repo, group docker" ;;
+    nvm-node)         echo "nvm + mọi bản Node + snippet trong rc" ;;
+    vietnamese-input) echo "ibus-bamboo/unikey + PPA (GIỮ gói ibus)" ;;
+    zsh)              echo "Oh My Zsh, p10k, font, zsh; về lại bash" ;;
+    base)             echo "Tiện ích CLI an toàn (jq, tree, rg, fd)" ;;
     *)                echo "" ;;
   esac
 }
@@ -46,17 +49,45 @@ list_modules() {
   done
 }
 
-run_module() {
-  local m="$1" script="$HERE/$1/uninstall.sh"
+# RESULTS ghi lại "<module>|<exit code>|<số giây>" để in bảng tổng kết ở cuối.
+RESULTS=()
+
+run_module() { # run_module <module> <thứ tự> <tổng số>
+  local m="$1" i="$2" n="$3" script="$HERE/$1/uninstall.sh"
   [[ -f "$script" ]] || die "Không tìm thấy module gỡ: $m ($script)"
+  local start=$SECONDS rc=0
   echo
-  printf "${C_BLUE}────── gỡ %s ──────${C_RESET}\n" "$m"
-  if bash "$script"; then
-    ok "module '$m' đã gỡ xong."
+  hr_title "[$i/$n] gỡ $m"
+  bash "$script" || rc=$?
+  local dur=$(( SECONDS - start ))
+  RESULTS+=("$m|$rc|$dur")
+  if (( rc == 0 )); then
+    ok "module '$m' đã gỡ xong. ($(fmt_dur "$dur"))"
   else
-    err "module '$m' lỗi (exit $?). Tiếp tục module kế tiếp."
+    err "module '$m' lỗi (exit $rc). Tiếp tục module kế tiếp."
     FAILED+=("$m")
   fi
+}
+
+# Không kẻ viền phải: bề rộng hiển thị của chuỗi tiếng Việt phụ thuộc locale
+# (${#s} đếm ký tự ở UTF-8 nhưng đếm byte ở LANG=C) nên viền phải sẽ lệch hàng.
+print_summary() {
+  local line m rc dur okn=0 errn=0 total=0
+  echo
+  printf "${C_DIM}╭─ Tổng kết ─────────────────────────────${C_RESET}\n"
+  for line in "${RESULTS[@]+"${RESULTS[@]}"}"; do
+    IFS='|' read -r m rc dur <<<"$line"
+    total=$(( total + dur ))
+    if (( rc == 0 )); then
+      okn=$(( okn + 1 ))
+      printf "${C_DIM}│${C_RESET}  ${C_GREEN}✔${C_RESET} %-18s %6s\n" "$m" "$(fmt_dur "$dur")"
+    else
+      errn=$(( errn + 1 ))
+      printf "${C_DIM}│${C_RESET}  ${C_RED}✘${C_RESET} %-18s %6s  ${C_RED}exit %s${C_RESET}\n" "$m" "$(fmt_dur "$dur")" "$rc"
+    fi
+  done
+  printf "${C_DIM}╰────────────────────────────────────────${C_RESET}\n"
+  printf "  %d đã gỡ · %d lỗi · tổng %s\n" "$okn" "$errn" "$(fmt_dur "$total")"
 }
 
 require_ubuntu
@@ -77,6 +108,7 @@ log "Ubuntu ${OS_VERSION} (${OS_CODENAME:-?}) — ubuntu-setup / uninstall"
 
 FAILED=()
 selected=()
+chosen=""; tui_args=()
 
 case "${1:-}" in
   --list|-l) list_modules; exit 0 ;;
@@ -85,22 +117,33 @@ case "${1:-}" in
   # bằng tay mỗi lần sửa header).
   --help|-h) awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"; exit 0 ;;
   "")
-    have_tty || die "Không có tty để hiện menu. Chỉ định module trực tiếp, hoặc dùng --all."
-    list_modules
-    echo
-    echo "  a) tất cả"
-    # Không đặt default là "a": `read -a` với input rỗng cho mảng rỗng, nên bấm
-    # nhầm Enter là chọn gỡ sạch mọi module.
-    read -r -p "Chọn (vd: 1 3 4 | a | Enter để huỷ): " -a picks </dev/tty || true
-    for p in "${picks[@]+"${picks[@]}"}"; do
-      if [[ "$p" == "a" || "$p" == "all" ]]; then
-        selected=("${MODULES[@]}"); break
-      elif [[ "$p" =~ ^[0-9]+$ ]] && (( p >= 1 && p <= ${#MODULES[@]} )); then
-        selected+=("${MODULES[p-1]}")
-      else
-        warn "Bỏ qua lựa chọn không hợp lệ: $p"
+    if use_tui; then
+      # Khác install: ở đây KHÔNG tick sẵn gì cả. Đây là thao tác gỡ, mặc định
+      # phải là "không đụng gì" — người dùng tự tick đúng thứ mình muốn bỏ.
+      tui_args=()
+      for m in "${MODULES[@]}"; do tui_args+=("$m" "$(describe "$m")" off); done
+      if ! chosen="$(menu_checklist "ubuntu-setup — chọn module muốn GỠ" "Bắt đầu gỡ" "${tui_args[@]}")"; then
+        die "Đã huỷ."
       fi
-    done
+      while IFS= read -r m; do [[ -n "$m" ]] && selected+=("$m"); done <<<"$chosen"
+    else
+      have_tty || die "Không có tty để hiện menu. Chỉ định module trực tiếp, hoặc dùng --all."
+      list_modules
+      echo
+      echo "  a) tất cả"
+      # Không đặt default là "a": `read -a` với input rỗng cho mảng rỗng, nên bấm
+      # nhầm Enter là chọn gỡ sạch mọi module.
+      read -r -p "Chọn (vd: 1 3 4 | a | Enter để huỷ): " -a picks </dev/tty || true
+      for p in "${picks[@]+"${picks[@]}"}"; do
+        if [[ "$p" == "a" || "$p" == "all" ]]; then
+          selected=("${MODULES[@]}"); break
+        elif [[ "$p" =~ ^[0-9]+$ ]] && (( p >= 1 && p <= ${#MODULES[@]} )); then
+          selected+=("${MODULES[p-1]}")
+        else
+          warn "Bỏ qua lựa chọn không hợp lệ: $p"
+        fi
+      done
+    fi
     ;;
   *) selected=("$@") ;;
 esac
@@ -127,13 +170,15 @@ confirm "Tiếp tục gỡ?" || die "Đã huỷ."
 
 need_sudo   # xin sudo 1 lần cho cả run
 
-for m in "${selected[@]}"; do run_module "$m"; done
+idx=0
+for m in "${selected[@]}"; do
+  idx=$(( idx + 1 ))
+  run_module "$m" "$idx" "${#selected[@]}"
+done
 
-echo
+print_summary
 if (( ${#FAILED[@]} )); then
   err "Module lỗi: ${FAILED[*]}"
-else
-  ok "Đã gỡ xong các module đã chọn."
 fi
 cat <<'EOF'
 
