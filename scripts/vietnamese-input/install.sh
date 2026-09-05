@@ -37,7 +37,7 @@ case "$ENGINE" in
       sudo sed -i "s/Suites: ${OS_CODENAME}/Suites: ${PPA_CODENAME}/g" \
         /etc/apt/sources.list.d/bamboo-engine-ubuntu-ibus-bamboo-*.sources 2>/dev/null || true
     fi
-    _APT_UPDATED=""   # ép update lại sau khi thêm PPA
+    apt_invalidate_update   # vừa thêm repo -> phải update lại
     apt_install ibus-bamboo
     ENGINE_ID="Bamboo"
     ;;

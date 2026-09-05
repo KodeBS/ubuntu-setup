@@ -21,19 +21,19 @@ fi
 
 log "Gỡ package docker cũ của Ubuntu (nếu có)"
 for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do
-  sudo apt-get remove -y "$pkg" >/dev/null 2>&1 || true
+  apt_get remove -y "$pkg" >/dev/null 2>&1 || true
 done
 
 log "Thêm GPG key của Docker"
 sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo curl -fsSL "${CURL_RETRY[@]}" https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 sudo chmod a+r /etc/apt/keyrings/docker.asc
 
 log "Thêm repo Docker (${DOCKER_CODENAME}/${ARCH})"
 echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${DOCKER_CODENAME} stable" \
   | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 
-_APT_UPDATED=""   # ép apt update lại sau khi thêm repo
+apt_invalidate_update   # vừa thêm repo -> phải update lại
 apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 log "Bật & khởi động docker service"

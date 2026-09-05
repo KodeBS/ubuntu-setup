@@ -143,6 +143,8 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
 
 | Env var | Giá trị | Script |
 |---|---|---|
+| `BASE_UPGRADE` | `1` nâng cấp toàn hệ thống \| `0` bỏ qua \| bỏ trống thì hỏi | base |
+| `APT_LOCK_WAIT` | số giây chờ khi apt bị khoá, mặc định `300` | mọi module |
 | `NODE_VERSION` | `22`, `24`, `lts/*`, `18.20.4`... | nvm-node |
 | `NVM_VERSION` | tag nvm, mặc định `v0.40.3` | nvm-node |
 | `VN_INPUT_ENGINE` | `bamboo` \| `unikey` | vietnamese-input |
@@ -195,5 +197,7 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
     và lạc lõng. Kiểm chứng: `wl-paste --watch echo x` → báo thiếu data-control protocol.
 
 ## Ghi chú khi lên 26.04
+
+Trên máy **vừa cài xong**, `unattended-upgrades` chạy ngay sau lần boot đầu và giữ khoá dpkg vài phút. Mặc định `apt` không chờ mà fail luôn, nên script truyền `-o DPkg::Lock::Timeout=300` cho mọi lệnh apt — gặp khoá thì đợi thay vì chết. Chỉnh bằng `APT_LOCK_WAIT`.
 
 Repo bên thứ ba đôi khi publish trễ vài tuần sau khi Ubuntu ra bản mới. Docker thì script tự kiểm tra repo, không có thì tự lùi về `noble`; PPA ibus-bamboo thì dùng `VN_INPUT_PPA_CODENAME=noble`. Ngoài hai chỗ đó không có gì phụ thuộc version cụ thể.

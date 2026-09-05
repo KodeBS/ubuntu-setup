@@ -17,7 +17,7 @@ if [[ -d "$ZSH_DIR" ]]; then
 else
   log "Cài Oh My Zsh"
   RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+    sh -c "$(curl -fsSL "${CURL_RETRY[@]}" https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 fi
 
 [[ -f "$HOME/.zshrc" ]] || cp "$ZSH_DIR/templates/zshrc.zsh-template" "$HOME/.zshrc"
@@ -72,7 +72,7 @@ install_nerd_font() {
   mkdir -p "$dir"
   local failed=0
   for v in "${missing[@]}"; do
-    if curl -fsSL "$base/$v/JetBrainsMonoNerdFontMono-$v.ttf" -o "$dir/JetBrainsMonoNerdFontMono-$v.ttf"; then
+    if curl -fsSL "${CURL_RETRY[@]}" "$base/$v/JetBrainsMonoNerdFontMono-$v.ttf" -o "$dir/JetBrainsMonoNerdFontMono-$v.ttf"; then
       dim "  JetBrainsMonoNerdFontMono-$v.ttf"
     else
       warn "Không tải được JetBrainsMonoNerdFontMono-$v"; rm -f "$dir/JetBrainsMonoNerdFontMono-$v.ttf"

@@ -17,7 +17,7 @@ if [[ -s "$NVM_DIR/nvm.sh" ]]; then
   ok "nvm đã có ở $NVM_DIR"
 else
   log "Cài nvm $NVM_VERSION"
-  curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
+  curl -fsSL "${CURL_RETRY[@]}" "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
 fi
 
 # nạp nvm vào shell hiện tại

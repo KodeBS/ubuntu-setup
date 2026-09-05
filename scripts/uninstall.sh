@@ -168,6 +168,12 @@ fi
 
 confirm "Tiếp tục gỡ?" || die "Đã huỷ."
 
+# Thư mục dùng chung cho cả lượt chạy: các module là tiến trình riêng nên cần
+# một chỗ trên đĩa để báo nhau "đã apt update rồi" (xem apt_update_once).
+UBUNTU_SETUP_RUN="$(mktemp -d)"
+export UBUNTU_SETUP_RUN
+trap 'rm -rf "$UBUNTU_SETUP_RUN"' EXIT
+
 need_sudo   # xin sudo 1 lần cho cả run
 
 idx=0

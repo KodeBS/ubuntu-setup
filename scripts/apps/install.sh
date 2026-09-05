@@ -13,12 +13,12 @@ install_vscode() {
   if has code; then ok "VS Code đã có."; return; fi
   log "Cài VS Code (repo Microsoft)"
   sudo install -m 0755 -d /etc/apt/keyrings
-  wget -qO- https://packages.microsoft.com/keys/microsoft.asc \
+  wget -q --tries=3 --retry-connrefused -O- https://packages.microsoft.com/keys/microsoft.asc \
     | gpg --dearmor | sudo tee /etc/apt/keyrings/packages.microsoft.gpg >/dev/null
   sudo chmod go+r /etc/apt/keyrings/packages.microsoft.gpg
   echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" \
     | sudo tee /etc/apt/sources.list.d/vscode.list >/dev/null
-  _APT_UPDATED=""
+  apt_invalidate_update   # vừa thêm repo -> phải update lại
   apt_install code
 }
 
@@ -31,8 +31,9 @@ install_chrome() {
   local tmp; tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' RETURN
   local deb="$tmp/google-chrome-stable.deb"
-  wget -qO "$deb" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$deb"
+  wget -q --tries=3 --retry-connrefused -O "$deb" \
+    https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+  apt_get install -y "$deb"
 }
 
 install_postman() {

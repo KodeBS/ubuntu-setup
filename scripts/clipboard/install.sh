@@ -80,7 +80,7 @@ install_extension() {
   log "GNOME Shell $ver — hỏi extensions.gnome.org bản tương thích"
 
   local info
-  info="$(curl -fsSL --max-time 20 \
+  info="$(curl -fsSL "${CURL_RETRY[@]}" --max-time 20 \
     "https://extensions.gnome.org/extension-info/?uuid=${UUID}&shell_version=${ver}")" \
     || die "Không tải được metadata của $UUID (mất mạng, hoặc extension chưa hỗ trợ GNOME $ver)."
 
@@ -103,7 +103,7 @@ print(m["pk"], m["version"])
   local tmp; tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' RETURN
   log "Tải $UUID v$remote"
-  curl -fsSL --max-time 60 -o "$tmp/ext.zip" \
+  curl -fsSL "${CURL_RETRY[@]}" --max-time 60 -o "$tmp/ext.zip" \
     "https://extensions.gnome.org/download-extension/${UUID}.shell-extension.zip?version_tag=${tag}" \
     || die "Tải extension thất bại."
 

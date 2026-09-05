@@ -16,6 +16,12 @@ dim()   { printf "${C_DIM}%s${C_RESET}\n" "$*"; }
 
 has() { command -v "$1" >/dev/null 2>&1; }
 
+# Máy vừa cài thường vừa nối WiFi/DHCP xong, mạng chưa ổn định; hỏng đúng một
+# nhịp là cả module fail. --retry chỉ thử lại với lỗi kết nối và 5xx/408/429,
+# KHÔNG thử lại 404 — nên chỗ dùng curl để dò "repo này có tồn tại không" vẫn
+# trả lời sai/đúng ngay lập tức như cũ.
+CURL_RETRY=(--retry 3 --retry-connrefused --retry-delay 2)
+
 # --- OS detection -------------------------------------------------------------
 # shellcheck disable=SC1091
 [[ -r /etc/os-release ]] && . /etc/os-release
@@ -39,18 +45,57 @@ need_sudo() {
   while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done >/dev/null 2>&1 &
 }
 
+# --- apt ----------------------------------------------------------------------
+# Mọi lệnh apt phải đi qua đây, đừng gọi `sudo apt-get` thẳng.
+#
+# DPkg::Lock::Timeout là thứ quan trọng nhất: trên máy vừa cài xong, systemd chạy
+# apt-daily/unattended-upgrades ngay sau lần boot đầu và giữ khoá dpkg vài phút.
+# Mặc định apt KHÔNG chờ, nó fail ngay -> module đầu tiên chết, rồi mọi module
+# dùng apt phía sau chết theo, trong khi thật ra chỉ cần đợi một lúc.
+APT_LOCK_WAIT="${APT_LOCK_WAIT:-300}"
+apt_get() { # apt_get <đối số của apt-get>
+  sudo DEBIAN_FRONTEND=noninteractive \
+       apt-get -o DPkg::Lock::Timeout="$APT_LOCK_WAIT" "$@"
+}
+
+# Dấu hiệu "đã apt update trong lượt chạy này".
+#
+# Không dùng riêng biến _APT_UPDATED được: dispatcher chạy mỗi module bằng một
+# tiến trình `bash` riêng, biến của tiến trình con không truyền ngược lên cha,
+# nên `--all` sẽ update lại 5-6 lần. Dispatcher export UBUNTU_SETUP_RUN (một thư
+# mục tạm cho cả lượt chạy) để các module dùng chung một dấu hiệu trên đĩa.
+# Chạy module lẻ (không qua dispatcher) thì biến đó trống -> quay về hành vi cũ.
+# Phải trả 0 cả khi không có gì để in: viết `[[ ... ]] && printf` thì lúc biến
+# trống hàm trả 1, `stamp="$(_apt_stamp)"` mang theo exit code đó và `set -e`
+# giết script ngay giữa chừng — chạy module lẻ sẽ chết im lặng.
+_apt_stamp() {
+  [[ -n "${UBUNTU_SETUP_RUN:-}" ]] || return 0
+  printf '%s/apt-updated' "$UBUNTU_SETUP_RUN"
+}
+
 apt_update_once() {
-  if [[ -z "${_APT_UPDATED:-}" ]]; then
-    log "apt update"
-    sudo apt-get update -y
-    _APT_UPDATED=1
-  fi
+  local stamp; stamp="$(_apt_stamp)"
+  [[ -n "${_APT_UPDATED:-}" ]] && return 0
+  [[ -n "$stamp" && -f "$stamp" ]] && { _APT_UPDATED=1; return 0; }
+  log "apt update"
+  apt_get update -y
+  _APT_UPDATED=1
+  [[ -n "$stamp" ]] && : >"$stamp"
+  return 0
+}
+
+# Gọi sau khi thêm repo/PPA mới: lần apt_install kế tiếp phải update lại.
+apt_invalidate_update() {
+  local stamp; stamp="$(_apt_stamp)"
+  _APT_UPDATED=""
+  [[ -n "$stamp" ]] && rm -f "$stamp"
+  return 0
 }
 
 apt_install() {
   apt_update_once
   log "apt install: $*"
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+  apt_get install -y "$@"
 }
 
 # Có mở được /dev/tty không? `[[ -r /dev/tty ]]` KHÔNG đủ: khi tiến trình không
@@ -116,7 +161,7 @@ apt_remove() { # apt_remove <pkg>...
   local verb=remove
   purging && verb=purge
   log "apt-get $verb: ${present[*]}"
-  sudo DEBIAN_FRONTEND=noninteractive apt-get "$verb" -y "${present[@]}"
+  apt_get "$verb" -y "${present[@]}"
 }
 
 ts() { date +%Y%m%d-%H%M%S; }
