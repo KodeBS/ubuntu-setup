@@ -53,9 +53,22 @@ apt_install() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
 }
 
+# Có mở được /dev/tty không? `[[ -r /dev/tty ]]` KHÔNG đủ: khi tiến trình không
+# có controlling terminal (cron, setsid, một số container) thì file vẫn tồn tại và
+# đủ quyền, chỉ có open() mới fail. Phải thử mở thật — và thử trong subshell, để
+# lỗi redirect không giết luôn shell cha.
+have_tty() { (: </dev/tty) 2>/dev/null; }
+
+# Không có tty (ssh 'bash install.sh', cron, container...) -> coi như trả lời "no"
+# thay vì đọc hụt rồi để biến rỗng. `ans` PHẢI được gán sẵn: `local ans` chỉ khai
+# báo chứ không gán, nên `${ans,,}` sẽ nổ "unbound variable" dưới `set -u`.
 confirm() { # confirm "Câu hỏi?"  -> 0 nếu yes
   [[ "${ASSUME_YES:-0}" == 1 ]] && { dim "? $1 -> yes (--yes)"; return 0; }
-  local ans
+  local ans=""
+  if ! have_tty; then
+    warn "Không có tty để hỏi \"$1\" -> mặc định KHÔNG. Dùng ASSUME_YES=1 nếu muốn tự động."
+    return 1
+  fi
   read -r -p "$(printf "${C_YELLOW}?${C_RESET} %s [y/N] " "$1")" ans </dev/tty || true
   [[ "${ans,,}" == y || "${ans,,}" == yes ]]
 }
@@ -81,7 +94,11 @@ purging() { [[ "$PURGE" == 1 ]]; }
 confirm_danger() { # confirm_danger "Sắp xoá vĩnh viễn X"
   err "$1"
   [[ "$ASSUME_YES" == 1 ]] && { warn "--yes: bỏ qua xác nhận, vẫn xoá."; return 0; }
-  local ans
+  local ans=""
+  if ! have_tty; then
+    warn "Không có tty để xác nhận -> KHÔNG xoá. Dùng ASSUME_YES=1 nếu thật sự muốn."
+    return 1
+  fi
   read -r -p "$(printf "${C_RED}!!${C_RESET} Gõ 'yes' để xác nhận: ")" ans </dev/tty || true
   [[ "$ans" == yes ]]
 }
@@ -140,6 +157,28 @@ safe_rm() { # safe_rm <path>...
     fi
   done
   return $rc
+}
+
+# Ghi lại khối `plugins=(...)` trong .zshrc.
+#
+# Phải xử lý được cả dạng nhiều dòng — rất nhiều người viết .zshrc kiểu này:
+#     plugins=(
+#       git
+#       docker
+#     )
+# `sed` làm việc theo từng dòng nên chỉ thay được dòng `plugins=(`, để lại phần
+# đuôi `git`, `docker`, `)` lơ lửng -> zsh báo lỗi cú pháp mỗi lần mở shell.
+# Nên khớp cả khối bằng perl -0777 (slurp cả file), và chỉ thay lần xuất hiện đầu.
+set_zsh_plugins() { # set_zsh_plugins <file> <danh sách plugin>
+  local file="$1" plugins="$2"
+  [[ -f "$file" ]] || { ensure_line "$file" "plugins=($plugins)"; return 0; }
+  if grep -qE '^[[:space:]]*plugins=\(' "$file"; then
+    backup_file "$file"
+    ZSH_PLUGINS="$plugins" perl -0777 -i \
+      -pe 's/^[ \t]*plugins=\([^)]*\)/"plugins=(" . $ENV{ZSH_PLUGINS} . ")"/me' "$file"
+  else
+    ensure_line "$file" "plugins=($plugins)"
+  fi
 }
 
 # Xoá mọi dòng khớp regex khỏi file (có backup). Giữ nguyên quyền/owner của file.

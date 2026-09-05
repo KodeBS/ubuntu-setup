@@ -9,6 +9,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/../lib/common.sh"
 
+require_ubuntu
+
 [[ "${1:-}" == --help || "${1:-}" == -h ]] && {
   awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"; exit 0; }
 
@@ -65,8 +67,8 @@ rm -f "$tmp"
 if sudo findmnt --verify -F "$FSTAB" >/dev/null 2>&1; then
   ok "Đã dọn /etc/fstab."
 else
-  warn "fstab sau khi sửa không hợp lệ — khôi phục backup."
-  sudo cp "$(ls -1t ${FSTAB}.bak-* | head -1)" "$FSTAB"
+  warn "fstab sau khi sửa không hợp lệ — khôi phục $bak"
+  sudo cp -a "$bak" "$FSTAB"
   die "Đã hoàn tác."
 fi
 sudo systemctl daemon-reload

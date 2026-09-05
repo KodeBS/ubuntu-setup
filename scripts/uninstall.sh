@@ -85,11 +85,14 @@ case "${1:-}" in
   # bằng tay mỗi lần sửa header).
   --help|-h) awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"; exit 0 ;;
   "")
+    have_tty || die "Không có tty để hiện menu. Chỉ định module trực tiếp, hoặc dùng --all."
     list_modules
     echo
     echo "  a) tất cả"
-    read -r -p "Chọn (vd: 1 3 4 | a): " -a picks </dev/tty || true
-    for p in "${picks[@]:-a}"; do
+    # Không đặt default là "a": `read -a` với input rỗng cho mảng rỗng, nên bấm
+    # nhầm Enter là chọn gỡ sạch mọi module.
+    read -r -p "Chọn (vd: 1 3 4 | a | Enter để huỷ): " -a picks </dev/tty || true
+    for p in "${picks[@]+"${picks[@]}"}"; do
       if [[ "$p" == "a" || "$p" == "all" ]]; then
         selected=("${MODULES[@]}"); break
       elif [[ "$p" =~ ^[0-9]+$ ]] && (( p >= 1 && p <= ${#MODULES[@]} )); then

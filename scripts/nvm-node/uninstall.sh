@@ -22,10 +22,21 @@ else
 fi
 
 # --- 2. snippet trong rc file ----------------------------------------------------
-# nvm-node.sh ghi đúng khối 4 dòng: comment "# nvm" + export NVM_DIR + 2 dòng source.
+# Chỉ xoá ĐÚNG những dòng loader mà install.sh (và install script của chính nvm)
+# ghi ra: comment "# nvm" + export NVM_DIR + 2 dòng `[ -s ... ] && . ...`.
+#
+# KHÔNG quét theo keyword "NVM_DIR": người dùng hay tự thêm những dòng như
+# `export PATH="$NVM_DIR/versions/node/v22/bin:$PATH"`, hook của direnv hay
+# nvm-auto-use... Xoá bừa theo keyword là mất cấu hình chẳng liên quan gì.
+NVM_LINE_RE='^(# nvm|export NVM_DIR=|\[ -s "\$NVM_DIR/nvm\.sh" \]|\[ -s "\$NVM_DIR/bash_completion" \])'
 for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
   [[ -f "$rc" ]] || continue
-  strip_lines "$rc" '(^# nvm$|NVM_DIR|nvm\.sh|\$NVM_DIR/bash_completion)'
+  strip_lines "$rc" "$NVM_LINE_RE"
+  # Dòng nào còn nhắc tới nvm thì chỉ báo ra, để người dùng tự quyết.
+  if grep -qE 'NVM_DIR|nvm\.sh' "$rc"; then
+    warn "$rc còn dòng nhắc tới nvm (không do script này ghi) — giữ nguyên:"
+    grep -nE 'NVM_DIR|nvm\.sh' "$rc" | sed 's/^/      /' >&2
+  fi
 done
 
 # --- 3. cảnh báo Node cài bằng apt ------------------------------------------------

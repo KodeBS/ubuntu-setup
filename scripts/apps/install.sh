@@ -25,10 +25,14 @@ install_vscode() {
 install_chrome() {
   if has google-chrome || has google-chrome-stable; then ok "Chrome đã có."; return; fi
   log "Cài Google Chrome (.deb chính thức)"
-  local deb="/tmp/google-chrome-stable.deb"
+  # mktemp -d chứ không phải /tmp/<tên cố định>: trên máy nhiều user, ai đó tạo
+  # sẵn symlink ở path đoán được là `wget -O` ghi theo symlink, rồi file đó được
+  # `apt-get install` với quyền root.
+  local tmp; tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
+  local deb="$tmp/google-chrome-stable.deb"
   wget -qO "$deb" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$deb"
-  rm -f "$deb"
 }
 
 install_postman() {

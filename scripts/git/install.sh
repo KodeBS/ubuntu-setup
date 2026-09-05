@@ -34,8 +34,14 @@ if [[ -f "$KEY" ]]; then
 elif confirm "Tạo SSH key mới (ed25519) cho $GIT_EMAIL?"; then
   mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
   ssh-keygen -t ed25519 -C "$GIT_EMAIL" -f "$KEY"
-  eval "$(ssh-agent -s)" >/dev/null
-  ssh-add "$KEY"
+  # Không tự `eval $(ssh-agent -s)` ở đây: agent đó chỉ sống trong tiến trình
+  # script, script thoát là thành tiến trình mồ côi chạy mãi, còn key thì không
+  # shell nào dùng được. Nạp vào agent của session hiện tại nếu có, không thì thôi.
+  if [[ -n "${SSH_AUTH_SOCK:-}" ]] && ssh-add "$KEY" >/dev/null 2>&1; then
+    dim "(đã nạp key vào ssh-agent của session)"
+  else
+    dim "(chưa có ssh-agent trong session — chạy: eval \"\$(ssh-agent -s)\" && ssh-add $KEY)"
+  fi
   echo
   ok "Public key — copy vào GitHub/GitLab:"
   cat "${KEY}.pub"

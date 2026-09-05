@@ -39,11 +39,7 @@ clone_plugin https://github.com/romkatv/powerlevel10k              "$ZSH_CUSTOM/
 
 # --- cấu hình .zshrc -----------------------------------------------------------
 PLUGINS="git docker docker-compose npm node z zsh-completions zsh-autosuggestions zsh-syntax-highlighting"
-if grep -qE '^\s*plugins=' "$HOME/.zshrc"; then
-  sed -i "s|^\s*plugins=.*|plugins=($PLUGINS)|" "$HOME/.zshrc"
-else
-  ensure_line "$HOME/.zshrc" "plugins=($PLUGINS)"
-fi
+set_zsh_plugins "$HOME/.zshrc" "$PLUGINS"
 ok "plugins=($PLUGINS)"
 
 # --- JetBrainsMono Nerd Font ----------------------------------------------------
@@ -121,6 +117,7 @@ set_terminal_font() {
 
 if confirm "Dùng theme Powerlevel10k? (không thì giữ theme hiện tại)"; then
   if grep -qE '^\s*ZSH_THEME=' "$HOME/.zshrc"; then
+    backup_file "$HOME/.zshrc"
     sed -i 's|^\s*ZSH_THEME=.*|ZSH_THEME="powerlevel10k/powerlevel10k"|' "$HOME/.zshrc"
   else
     ensure_line "$HOME/.zshrc" 'ZSH_THEME="powerlevel10k/powerlevel10k"'

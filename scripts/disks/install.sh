@@ -52,20 +52,31 @@ has parted   || apt_install parted
 [[ "$DISK_FS" == xfs ]] && ! has mkfs.xfs && apt_install xfsprogs
 
 # --- nhận diện ổ hệ thống ------------------------------------------------------
-# Ổ nào đang chứa /, /boot, /boot/efi hoặc swap thì tuyệt đối không được đụng.
+# Ổ nào đang chứa /, /boot, /boot/efi, /home hoặc swap thì tuyệt đối không đụng.
+
+# Trả về các ổ VẬT LÝ nằm dưới một thiết bị bất kỳ.
+#
+# Không dùng PKNAME: nó chỉ cho ra cha TRỰC TIẾP. Với root nằm trên LVM/LUKS/RAID
+# thì cha trực tiếp của /dev/mapper/... là partition (hoặc rỗng), không phải tên ổ
+# -> so khớp với danh sách ổ luôn trượt, và ổ hệ thống lọt vào danh sách "gắn thêm
+# được". `lsblk -s` liệt kê toàn bộ tổ tiên nên đi tới tận ổ vật lý, và xử lý được
+# cả RAID (một thiết bị nằm trên NHIỀU ổ). Phải có -l: mặc định lsblk vẽ cây bằng
+# ký tự ├─└─ và chúng dính vào tên thiết bị.
+holder_disks() { # holder_disks <thiết bị> -> /dev/<ổ>...
+  lsblk -nslo NAME,TYPE "$1" 2>/dev/null | awk '$2=="disk" { print "/dev/"$1 }'
+}
+
 system_disks() {
-  local mp src pk
-  for mp in / /boot /boot/efi; do
+  local mp src name type
+  for mp in / /boot /boot/efi /home; do
     src="$(findmnt -no SOURCE --target "$mp" 2>/dev/null || true)"
     [[ -n "$src" && -b "$src" ]] || continue
-    pk="$(lsblk -no PKNAME "$src" 2>/dev/null | head -1)"
-    [[ -n "$pk" ]] && echo "/dev/$pk" || echo "$src"
+    holder_disks "$src"
   done
   # swap trên partition (swapfile thì nằm trong / nên đã tính ở trên)
   while read -r name type _; do
     [[ "$type" == partition && -b "$name" ]] || continue
-    pk="$(lsblk -no PKNAME "$name" 2>/dev/null | head -1)"
-    [[ -n "$pk" ]] && echo "/dev/$pk"
+    holder_disks "$name"
   done < <(tail -n +2 /proc/swaps 2>/dev/null || true)
 }
 
@@ -115,9 +126,12 @@ pick_disks_interactive() {
     i=$((i + 1))
   done
   echo
+  have_tty || { warn "Không có tty để hiện menu — dùng DISKS=\"/dev/sdX=Tên\" nếu muốn chạy tự động."; exit 0; }
   local -a picks=()
   read -r -p "Chọn ổ (vd: 1 2): " -a picks </dev/tty || true
-  (( ${#picks[@]} )) || die "Không chọn ổ nào."
+  # Không chọn gì là ý muốn hợp lệ ("thôi không gắn ổ nào"), không phải lỗi —
+  # `install.sh --all` không nên báo module này fail chỉ vì người dùng bấm Enter.
+  (( ${#picks[@]} )) || { dim "Không chọn ổ nào — bỏ qua."; exit 0; }
 
   local p name
   for p in "${picks[@]}"; do
@@ -133,14 +147,19 @@ pick_disks_interactive() {
 # Ghi qua file tạm rồi validate; hỏng cú pháp fstab là lần boot sau vào emergency
 # shell, nên luôn có backup và luôn `findmnt --verify` trước khi coi là xong.
 fstab_write() { # fstab_write <nội dung mới trên stdin>
-  local tmp; tmp="$(mktemp)"
+  local tmp bak
+  tmp="$(mktemp)"
   cat >"$tmp"
-  sudo cp -a "$FSTAB" "${FSTAB}.bak-$(ts)"
+  # Giữ đường dẫn backup trong biến. KHÔNG dò lại bằng `ls -1t *.bak-*`: `cp -a`
+  # giữ nguyên mtime của file nguồn, nên thứ tự theo mtime không phải thứ tự tạo
+  # -> lúc cần rollback có thể vớ nhầm một bản backup cũ của lần chạy trước.
+  bak="${FSTAB}.bak-$(ts)"
+  sudo cp -a "$FSTAB" "$bak"
   sudo cp "$tmp" "$FSTAB"
   rm -f "$tmp"
   if ! sudo findmnt --verify -F "$FSTAB" >/dev/null 2>&1; then
-    warn "fstab mới không hợp lệ — khôi phục bản backup."
-    sudo cp "$(ls -1t ${FSTAB}.bak-* | head -1)" "$FSTAB"
+    warn "fstab mới không hợp lệ — khôi phục $bak"
+    sudo cp -a "$bak" "$FSTAB"
     die "Huỷ thay đổi fstab."
   fi
 }
@@ -193,7 +212,12 @@ setup_disk() { # setup_disk <dev> <tên>
 
   [[ -b "$dev" ]] || { err "Không thấy thiết bị: $dev"; return 1; }
   is_system_disk "$dev" && { err "$dev là ổ hệ thống — từ chối đụng vào."; return 1; }
+  [[ -n "$name" ]] || { err "$dev: chưa đặt tên thư mục."; return 1; }
   [[ "$name" == */* ]] && { err "Tên không được chứa '/': $name"; return 1; }
+  # fstab phân tách cột bằng khoảng trắng; mount point có dấu cách phải được mã
+  # hoá thành \040. Thay vì tự mã hoá rồi mọi lệnh sau (findmnt, umount, awk so
+  # cột $2) đều phải giải mã lại, chặn thẳng ở đây cho gọn và rõ.
+  [[ "$name" == *[[:space:]]* ]] && { err "Tên không được chứa dấu cách: '$name'"; return 1; }
 
   printf "${C_BLUE}────── %s -> %s ──────${C_RESET}\n" "$dev" "$mp"
 
@@ -225,11 +249,17 @@ setup_disk() { # setup_disk <dev> <tên>
     confirm_danger "Sắp format $dev ($what) — mất sạch, không khôi phục được." \
       || { warn "Bỏ qua $dev."; return 1; }
 
+    # `set -e` KHÔNG có tác dụng ở đây: hàm này được gọi dạng `setup_disk ... ||
+    # FAILED+=(...)`, mà bash tắt errexit trong toàn bộ thân hàm khi lời gọi nằm
+    # bên trái `||`. Nên mọi lệnh phá huỷ dưới đây phải tự kiểm tra exit code —
+    # không thì wipefs hỏng vẫn chạy tiếp tới parted rồi mkfs.
     log "Xoá bảng phân vùng cũ và tạo GPT mới trên $dev"
-    sudo wipefs -a "$dev"
-    sudo parted -s "$dev" mklabel gpt
-    sudo parted -s -a optimal "$dev" mkpart "$name" "$DISK_FS" 1MiB 100%
-    sudo partprobe "$dev"; sudo udevadm settle; sleep 1
+    sudo wipefs -a "$dev"            || { err "wipefs $dev thất bại."; return 1; }
+    sudo parted -s "$dev" mklabel gpt || { err "Tạo bảng phân vùng GPT thất bại."; return 1; }
+    sudo parted -s -a optimal "$dev" mkpart "$name" "$DISK_FS" 1MiB 100% \
+      || { err "Tạo phân vùng trên $dev thất bại."; return 1; }
+    sudo partprobe "$dev" || true    # kernel có thể đã tự nạp lại, không phải lỗi
+    sudo udevadm settle; sleep 1
 
     part="$(part1_of "$dev")"
     [[ -b "$part" ]] || { err "Không thấy partition $part sau khi tạo."; return 1; }
@@ -240,7 +270,7 @@ setup_disk() { # setup_disk <dev> <tên>
       # không cần nhiều thế.
       ext4) sudo mkfs.ext4 -F -L "$name" -m 1 "$part" ;;
       xfs)  sudo mkfs.xfs  -f -L "$name" "$part" ;;
-    esac
+    esac || { err "Format $part thất bại."; return 1; }
     fstype="$DISK_FS"
   fi
 
@@ -263,7 +293,7 @@ setup_disk() { # setup_disk <dev> <tên>
   esac
 
   log "Tạo mount point $mp"
-  sudo mkdir -p "$mp"
+  sudo mkdir -p "$mp" || { err "Không tạo được $mp."; return 1; }
 
   log "Ghi /etc/fstab (UUID=$uuid)"
   { fstab_drop_mount "$mp"
@@ -272,7 +302,9 @@ setup_disk() { # setup_disk <dev> <tên>
   } | fstab_write
 
   sudo systemctl daemon-reload
-  findmnt "$mp" >/dev/null 2>&1 && sudo umount "$mp"
+  if findmnt "$mp" >/dev/null 2>&1; then
+    sudo umount "$mp" || { err "Không umount được $mp (đang có tiến trình dùng?)."; return 1; }
+  fi
 
   # Đổi label ở đây, giữa umount và mount, vì hai lý do:
   #   1. e2label ghi thẳng superblock; làm khi filesystem đang mount là thao tác
@@ -327,7 +359,11 @@ fi
 
 FAILED=()
 for spec in "${SPECS[@]}"; do
-  spec="${spec// /}"
+  # Chỉ cắt khoảng trắng thừa hai đầu. KHÔNG dùng "${spec// /}" (xoá SẠCH dấu
+  # cách): DISKS="/dev/sdb=My Data" sẽ âm thầm thành thư mục "MyData", người dùng
+  # không hề biết tên mình đặt đã bị đổi.
+  spec="${spec#"${spec%%[![:space:]]*}"}"
+  spec="${spec%"${spec##*[![:space:]]}"}"
   [[ -z "$spec" ]] && continue
   [[ "$spec" == *=* ]] || { err "Sai cú pháp (cần dev=Tên): $spec"; FAILED+=("$spec"); continue; }
   echo

@@ -40,9 +40,9 @@ clean_zshrc() {
     sed -i 's|^\s*ZSH_THEME="powerlevel10k/powerlevel10k"|ZSH_THEME="robbyrussell"|' "$rc"
     ok 'ZSH_THEME -> "robbyrussell"'
   fi
-  if grep -qE '^\s*plugins=\(.*zsh-autosuggestions' "$rc"; then
-    backup_file "$rc"
-    sed -i 's|^\s*plugins=(.*|plugins=(git)|' "$rc"
+  # Khớp cả khối `plugins=(...)` nhiều dòng, không chỉ dòng đầu (xem set_zsh_plugins).
+  if perl -0777 -ne 'exit(/^[ \t]*plugins=\([^)]*zsh-autosuggestions/m ? 0 : 1)' "$rc"; then
+    set_zsh_plugins "$rc" "git"
     ok "plugins=(git)"
   fi
 }

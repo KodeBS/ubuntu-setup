@@ -35,6 +35,7 @@ cd ~/ubuntu-setup/scripts
 ./install.sh --all        # chạy hết theo thứ tự
 ./install.sh zsh docker   # chỉ chạy module chỉ định
 ./install.sh --list       # xem danh sách module
+./install.sh --yes --all  # không hỏi gì, trả lời "yes" cho mọi câu hỏi
 ```
 
 Từng module chạy độc lập được: `./scripts/docker/install.sh`, `./scripts/nvm-node/install.sh`, ...
