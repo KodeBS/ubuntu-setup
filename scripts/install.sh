@@ -20,7 +20,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib/common.sh"
 
 # Thứ tự chạy khi --all (base trước, phần còn lại phụ thuộc vào nó).
-MODULES=(base zsh vietnamese-input nvm-node docker git apps clipboard disks)
+MODULES=(base zsh vietnamese-input nvm-node docker git apps homelab clipboard disks)
 
 describe() {
   case "$1" in
@@ -31,6 +31,7 @@ describe() {
     docker)          echo "Docker Engine + Compose, không cần sudo" ;;
     git)             echo "Cấu hình git, SSH key, GitHub CLI" ;;
     apps)            echo "VS Code, Chrome, Postman" ;;
+    homelab)         echo "KodeBS Homelab (apt repo KodeBS)" ;;
     clipboard)       echo "Clipboard Indicator + phím tắt Super+V" ;;
     disks)           echo "Gắn ổ phụ vào fstab, tự mount khi boot" ;;
     *)               echo "" ;;

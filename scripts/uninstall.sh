@@ -23,12 +23,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib/common.sh"
 
 # Ngược thứ tự install (base gỡ sau cùng vì mọi module khác dựa vào nó).
-MODULES=(disks clipboard apps git docker nvm-node vietnamese-input zsh base)
+MODULES=(disks clipboard homelab apps git docker nvm-node vietnamese-input zsh base)
 
 describe() {
   case "$1" in
     disks)            echo "Bỏ ổ phụ khỏi fstab (KHÔNG xoá dữ liệu)" ;;
     clipboard)        echo "Clipboard Indicator + trả Super+V về tray" ;;
+    homelab)          echo "KodeBS Homelab + repo apt KodeBS" ;;
     apps)             echo "VS Code, Chrome, Postman + repo apt" ;;
     git)              echo "GitHub CLI + alias (GIỮ SSH key & email)" ;;
     docker)           echo "Docker Engine/Compose, repo, group docker" ;;

@@ -59,6 +59,7 @@ scripts/
 ├── docker/      install.sh  uninstall.sh
 ├── git/         install.sh  uninstall.sh
 ├── apps/        install.sh  uninstall.sh
+├── homelab/     install.sh  uninstall.sh
 ├── clipboard/   install.sh  uninstall.sh
 └── disks/       install.sh  uninstall.sh
 ```
@@ -105,6 +106,7 @@ Ngược với lúc cài, và trong module `zsh` thì **đổi shell mặc đị
 |---|---|---|
 | `disks` | Dòng fstab + bookmark sidebar, umount ổ | **Toàn bộ dữ liệu trên ổ** — không bao giờ format, kể cả `--purge` |
 | `clipboard` | Extension Clipboard Indicator, trả `Super+V` về message tray | Lịch sử clip trong `~/.cache/` |
+| `homelab` | Gói `kodebs-homelab`, entry autostart, repo apt KodeBS (chỉ khi không còn gói KodeBS nào khác) | `~/.config/KodeBS Homelab`, **và mọi thứ app đã cấu hình cho hệ thống**: site Nginx, rule UFW, xrdp, `/etc/docker/daemon.json` |
 | `apps` | VS Code, Chrome, Postman + repo apt & keyring | `~/.config/Code`, `~/.config/google-chrome`, snapshot snap |
 | `git` | GitHub CLI + repo apt, alias git do script tạo | SSH key, `user.name`/`user.email`, gói `git` |
 | `docker` | Engine/CLI/Compose, repo apt, gỡ user khỏi group `docker` | `/var/lib/docker` — image & volume còn nguyên |
@@ -126,6 +128,7 @@ Sau khi gỡ: **logout/reboot** để áp dụng shell bash, bỏ group `docker`
 | `docker/` | Docker Engine, CLI, Buildx, Compose plugin; thêm user vào group `docker` | [docs.docker.com](https://docs.docker.com/engine/install/ubuntu/), [DigitalOcean](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-22-04) |
 | `git/` | user.name/email, alias, SSH key ed25519, GitHub CLI | [git-scm](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup) |
 | `apps/` | VS Code, Google Chrome, Postman | [code.visualstudio.com](https://code.visualstudio.com/docs/setup/linux) |
+| `homelab/` | **KodeBS Homelab** — app desktop chạy một máy như home server (monitor, Docker, port, Nginx, UFW, direct link, task nền). Cài qua repo apt riêng nên lên bản mới cùng lượt `apt upgrade` | [kodebs.github.io/apt](https://kodebs.github.io/apt), [KodeBS/homelab](https://github.com/KodeBS/homelab) |
 | `clipboard/` | **Clipboard Indicator** (GNOME extension) + phím tắt `Super+V` | [Clipboard Indicator](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator) |
 | `disks/` | Gắn ổ cứng phụ (ổ chứa code/data) vào `/etc/fstab` **theo UUID** — tự mount mỗi lần boot, thêm vào sidebar của Files | [fstab(5)](https://man7.org/linux/man-pages/man5/fstab.5.html) |
 
@@ -151,6 +154,7 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" \
 | `VN_INPUT_PPA_CODENAME` | fallback nếu PPA chưa hỗ trợ codename mới, vd `noble` | vietnamese-input |
 | `DOCKER_CODENAME` | fallback nếu Docker chưa publish repo cho codename mới | docker |
 | `APPS` | `vscode,chrome,postman` | apps |
+| `KODEBS_APT_URL` | mặc định `https://kodebs.github.io/apt` — đổi khi dùng mirror riêng | homelab |
 | `GIT_NAME` / `GIT_EMAIL` | định danh commit; bỏ trống thì script hỏi | git |
 | `TERMINAL_FONT` | mặc định `JetBrainsMono Nerd Font Mono 11` (MesloLGS NF thiếu ký tự tiếng Việt) | zsh |
 | `CLIPBOARD_SHORTCUT` | mặc định `<Super>v` | clipboard |
